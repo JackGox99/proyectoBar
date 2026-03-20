@@ -23,21 +23,32 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Backport master → develop
-        id: backport
+      - name: Create backport branch
         run: |
+          BACKPORT_BRANCH="backport/master-to-develop-$(date +'%Y%m%d-%H%M%S')"
+          echo "BACKPORT_BRANCH=$BACKPORT_BRANCH" >> $GITHUB_ENV
           git fetch origin develop
-          git checkout develop
+          git checkout -b $BACKPORT_BRANCH origin/develop
           git merge origin/master --no-edit -m "chore: backport from master to develop"
-          git push origin develop
-        continue-on-error: true
+          git push origin $BACKPORT_BRANCH
 
-      - name: Create PR if merge had conflicts
-        if: steps.backport.outcome == 'failure'
-        uses: repo-sync/pull-request@v2
+      - name: Create PR backport → develop
+        uses: actions/github-script@v7
         with:
-          source_branch: master
-          destination_branch: develop
-          pr_title: "chore: backport master → develop (revisar conflictos)"
-          pr_body: "⚠️ El backport automático tuvo conflictos. Por favor resuelve manualmente."
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: 'chore: backport master → develop',
+              body: '🔄 Backport automático desde master. Revisar y mergear manualmente.',
+              head: process.env.BACKPORT_BRANCH,
+              base: 'develop'
+            });
+```
+
+---
+
+## Flujo final
+```
+feature/* → PR manual → develop → PR manual (release) → master → PR automático (backport) → develop
