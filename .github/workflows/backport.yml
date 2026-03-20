@@ -33,7 +33,7 @@ jobs:
           git merge origin/master --ff-only
           git push origin $BACKPORT_BRANCH
 
-      - name: Create PR backport → develop
+      - name: Create PR backport to develop
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -41,15 +41,8 @@ jobs:
             await github.rest.pulls.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: 'chore: backport master → develop',
-              body: '🔄 Backport automático desde master. Revisar y mergear manualmente.',
+              title: 'chore: backport master to develop',
+              body: 'Backport automatico desde master. Revisar y mergear manualmente.',
               head: process.env.BACKPORT_BRANCH,
               base: 'develop'
             });
-```
-
----
-
-## Flujo final
-```
-feature/* → PR manual → develop → PR manual (release) → master → PR automático (backport) → develop
