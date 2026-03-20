@@ -28,8 +28,9 @@ jobs:
           BACKPORT_BRANCH="backport/master-to-develop-$(date +'%Y%m%d-%H%M%S')"
           echo "BACKPORT_BRANCH=$BACKPORT_BRANCH" >> $GITHUB_ENV
           git fetch origin develop
+          git fetch origin master
           git checkout -b $BACKPORT_BRANCH origin/develop
-          git merge origin/master --no-edit -m "chore: backport from master to develop"
+          git merge origin/master --ff-only
           git push origin $BACKPORT_BRANCH
 
       - name: Create PR backport → develop
