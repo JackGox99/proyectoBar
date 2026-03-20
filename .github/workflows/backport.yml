@@ -1,0 +1,39 @@
+name: Backport master to develop
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  backport:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Backport master → develop
+        id: backport
+        run: |
+          git fetch origin develop
+          git checkout develop
+          git merge origin/master --no-edit -m "chore: backport from master to develop"
+          git push origin develop
+        continue-on-error: true
+
+      - name: Create PR if merge had conflicts
+        if: steps.backport.outcome == 'failure'
+        uses: repo-sync/pull-request@v2
+        with:
+          source_branch: master
+          destination_branch: develop
+          pr_title: "chore: backport master → develop (revisar conflictos)"
+          pr_body: "⚠️ El backport automático tuvo conflictos. Por favor resuelve manualmente."
+          github_token: ${{ secrets.GITHUB_TOKEN }}
