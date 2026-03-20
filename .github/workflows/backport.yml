@@ -1,0 +1,54 @@
+name: Backport master to develop
+
+on:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  backport:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Create backport branch
+        run: |
+          BACKPORT_BRANCH="backport/master-to-develop-$(date +'%Y%m%d-%H%M%S')"
+          echo "BACKPORT_BRANCH=$BACKPORT_BRANCH" >> $GITHUB_ENV
+          git fetch origin develop
+          git checkout -b $BACKPORT_BRANCH origin/develop
+          git merge origin/master --no-edit -m "chore: backport from master to develop"
+          git push origin $BACKPORT_BRANCH
+
+      - name: Create PR backport → develop
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: 'chore: backport master → develop',
+              body: '🔄 Backport automático desde master. Revisar y mergear manualmente.',
+              head: process.env.BACKPORT_BRANCH,
+              base: 'develop'
+            });
+```
+
+---
+
+## Flujo final
+```
+feature/* → PR manual → develop → PR manual (release) → master → PR automático (backport) → develop
