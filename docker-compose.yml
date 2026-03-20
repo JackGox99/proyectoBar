@@ -1,0 +1,42 @@
+services:
+
+  mysql:
+    image: mysql:8.0
+    container_name: proyectobar_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: proyectobar
+      MYSQL_USER: baruser
+      MYSQL_PASSWORD: barpassword
+    ports:
+      - "3306:3306"          # acceso desde tu máquina (DBeaver, etc.)
+    volumes:
+      - mysql_data:/var/lib/mysql   # persistencia en disco
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-ubaruser", "-pbarpassword"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    container_name: proyectobar_api
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy   # espera que MySQL esté listo
+    environment:
+      PORT: 8080
+      DB_HOST: mysql                 # nombre del servicio, no localhost
+      DB_PORT: 3306
+      DB_USER: baruser
+      DB_PASSWORD: barpassword
+      DB_NAME: proyectobar
+      JWT_SECRET: cambia_esto_por_un_secreto_seguro
+      JWT_EXPIRY_HOURS: 24
+    ports:
+      - "8080:8080"
+
+volumes:
+  mysql_data:
