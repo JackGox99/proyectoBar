@@ -1,0 +1,196 @@
+/* ============================================================
+   Bar Inventory — Global Stylesheet
+   Corporate palette + base resets
+   ============================================================ */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ------------------------------------------------------------
+   Corporate Color Palette (CSS Custom Properties)
+   These variables mirror tailwind.config.js for use in
+   non-Tailwind contexts (e.g. inline SVG, canvas, print).
+   ------------------------------------------------------------ */
+:root {
+  /* Brand */
+  --color-brand-primary:  #D4961A; /* amber gold  — logo, active states, CTA borders */
+  --color-brand-dark:     #1A0E02; /* mahogany     — brand dark */
+
+  /* Backgrounds */
+  --color-bg-base:        #0D0805; /* page background (near-black) */
+  --color-bg-surface:     #1C1208; /* card / panel background */
+  --color-bg-elevated:    #2B1A0B; /* dropdowns, modals */
+
+  /* Borders */
+  --color-border:         #3D2810;
+
+  /* Text */
+  --color-text-primary:   #F0E6D3; /* warm off-white */
+  --color-text-muted:     #A89070; /* secondary / placeholder */
+
+  /* Semantic */
+  --color-accent:         #E07030; /* call-to-action orange */
+  --color-success:        #4CAF50;
+  --color-error:          #EF5350;
+  --color-warning:        #FFC107;
+
+  /* Sizing */
+  --sidebar-width:        240px;
+  --header-height:        56px;
+}
+
+/* ------------------------------------------------------------
+   Base resets
+   ------------------------------------------------------------ */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background-color: var(--color-bg-base);
+  color: var(--color-text-primary);
+  line-height: 1.5;
+  min-height: 100vh;
+  /* Prevent horizontal scroll on mobile */
+  overflow-x: hidden;
+}
+
+/* ------------------------------------------------------------
+   Focus styles — accessible, visible on dark background
+   ------------------------------------------------------------ */
+:focus-visible {
+  outline: 2px solid var(--color-brand-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ------------------------------------------------------------
+   Scrollbar styling (Chrome/Edge)
+   ------------------------------------------------------------ */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-bg-surface);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-brand-primary);
+}
+
+/* ------------------------------------------------------------
+   Typography scale
+   ------------------------------------------------------------ */
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--color-text-primary);
+}
+
+h1 { font-size: 1.75rem; }
+h2 { font-size: 1.375rem; }
+h3 { font-size: 1.125rem; }
+
+p {
+  color: var(--color-text-primary);
+  line-height: 1.6;
+}
+
+a {
+  color: var(--color-brand-primary);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+/* ------------------------------------------------------------
+   Reusable component classes (Tailwind @layer components)
+   ------------------------------------------------------------ */
+@layer components {
+  /* Primary button */
+  .btn-primary {
+    @apply inline-flex items-center gap-2 px-4 py-2 rounded-md font-medium text-sm
+           transition-colors duration-150 focus-visible:outline-none;
+    background-color: var(--color-brand-primary);
+    color: var(--color-brand-dark);
+  }
+  .btn-primary:hover {
+    filter: brightness(1.1);
+  }
+  .btn-primary:active {
+    filter: brightness(0.9);
+  }
+
+  /* Ghost / outlined button */
+  .btn-ghost {
+    @apply inline-flex items-center gap-2 px-4 py-2 rounded-md font-medium text-sm
+           transition-colors duration-150 focus-visible:outline-none border;
+    border-color: var(--color-border);
+    color: var(--color-text-primary);
+    background: transparent;
+  }
+  .btn-ghost:hover {
+    border-color: var(--color-brand-primary);
+    color: var(--color-brand-primary);
+  }
+
+  /* Surface card */
+  .card {
+    @apply rounded-lg p-4;
+    background-color: var(--color-bg-surface);
+    border: 1px solid var(--color-border);
+  }
+
+  /* Navigation item */
+  .nav-item {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium
+           transition-colors duration-150 cursor-pointer w-full;
+    color: var(--color-text-muted);
+  }
+  .nav-item:hover {
+    background-color: var(--color-bg-elevated);
+    color: var(--color-text-primary);
+  }
+  .nav-item.active {
+    background-color: var(--color-bg-elevated);
+    color: var(--color-brand-primary);
+    border-left: 3px solid var(--color-brand-primary);
+  }
+
+  /* Status badge */
+  .badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
+  }
+  .badge-success {
+    @apply badge;
+    background-color: rgba(76, 175, 80, 0.15);
+    color: var(--color-success);
+  }
+  .badge-error {
+    @apply badge;
+    background-color: rgba(239, 83, 80, 0.15);
+    color: var(--color-error);
+  }
+  .badge-warning {
+    @apply badge;
+    background-color: rgba(255, 193, 7, 0.15);
+    color: var(--color-warning);
+  }
+}
