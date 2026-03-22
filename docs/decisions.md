@@ -190,6 +190,76 @@ func Register(r *gin.Engine, ctrl Controllers, authMiddleware gin.HandlerFunc)
 
 ---
 
+---
+
+## ADR-008 — Framework y sistema de diseño del Frontend
+
+**Estado:** Aceptado
+**Fecha:** 2026-03-21
+**HU relacionada:** HU004
+
+### Contexto
+Se necesita configurar el entorno base de la interfaz de usuario. El frontend debe ser responsive,
+en inglés, compatible con Google Chrome, y contar con una paleta corporativa.
+Se evaluaron tres familias de soluciones: frameworks component-based, frameworks ligeros, y HTML/CSS puro.
+
+### Alternativas evaluadas
+
+| Opción | Descripción | Descartada porque |
+|---|---|---|
+| **Vanilla HTML/CSS/JS** | Sin build tooling, Fetch API nativa | Sin componentes reutilizables; el mantenimiento se degrada rápidamente; sin hot-reload |
+| **HTML + Bootstrap CDN** | Bootstrap via CDN, sin bundle step | CSS completo (~200KB) aunque se use el 5%; clases genéricas dificultan la personalización de la paleta corporativa |
+| **Vue 3 + Vite + Tailwind** | Framework progresivo, Composition API | Ecosistema menor; React domina el mercado laboral y tiene más integraciones con librerías de UI |
+| **React + Vite + Tailwind CSS** ✓ | SPA component-based, Vite dev server, utilidades responsive | Elegido |
+| **Next.js** | React con SSR/SSG | Sobre-ingeniería para un panel interno; el backend Go ya sirve la API; SSR no aporta valor aquí |
+
+### Decisión
+**React 18 + Vite 5 + Tailwind CSS 3** como stack frontend.
+
+- **React**: modelo de componentes se alinea con la arquitectura en capas del backend (SRP, OCP).
+  Cada módulo del sistema (inventario, pedidos, reportes) mapea naturalmente a un componente/página.
+- **Vite**: dev server con HMR instantáneo + proxy a `:8080` para evitar CORS en desarrollo.
+  Build produce assets estáticos servibles por nginx sin servidor Node.js en producción.
+- **Tailwind CSS**: utilidades responsive (`md:hidden`, `md:translate-x-0`) resuelven el
+  comportamiento del sidebar hamburger sin JavaScript adicional. Tokens de color extendidos
+  en `tailwind.config.js` materializan la paleta corporativa como clases de utilidad.
+
+### Estructura del frontend
+
+```
+frontend/
+├── src/
+│   ├── components/layout/   # Header, Sidebar, Layout (shell)
+│   ├── pages/               # Una página por módulo de negocio
+│   └── index.css            # Paleta corporativa + utilidades globales
+├── vite.config.js           # Proxy /api → :8080
+├── tailwind.config.js       # Paleta corporativa extendida
+└── Dockerfile               # Multi-stage: build (node) + serve (nginx)
+```
+
+### Paleta corporativa
+
+| Token | Hex | Uso |
+|---|---|---|
+| `brand.primary` | `#D4961A` | Amber gold — logo, estados activos, CTA |
+| `brand.dark` | `#1A0E02` | Mahogany — textos sobre fondo dorado |
+| `bar.base` | `#0D0805` | Fondo de página (near-black) |
+| `bar.surface` | `#1C1208` | Cards y paneles |
+| `bar.elevated` | `#2B1A0B` | Dropdowns, modales |
+| `bar.accent` | `#E07030` | Naranja cálido — CTAs secundarios |
+| `bar.text` | `#F0E6D3` | Texto principal (off-white cálido) |
+| `bar.muted` | `#A89070` | Texto secundario / placeholders |
+
+### Consecuencias
+- **Positivo:** `npm run dev` levanta en 3000 con proxy al backend; no se necesita configurar CORS
+- **Positivo:** `npm run build` produce un `dist/` estático que nginx sirve sin Node.js en producción
+- **Positivo:** Tailwind purga CSS no usado → bundle final < 10KB de CSS
+- **Positivo:** Componentes React son testeables con Vitest + Testing Library
+- **Negativo:** Requiere Node.js ≥ 18 en el entorno de desarrollo
+- **Negativo:** Más archivos de configuración que vanilla HTML (mitigado por la consistencia ganada)
+
+---
+
 ## Decisiones pendientes (próximas HUs)
 
 | Decisión | HU | Opciones |

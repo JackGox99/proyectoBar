@@ -167,6 +167,82 @@ Go garantiza en tiempo de compilación que no haya ciclos de importación.
 
 ---
 
+---
+
+## Arquitectura Frontend (HU004)
+
+El sistema incluye una Single Page Application (SPA) que consume la API REST.
+
+### Stack
+
+| Tecnología | Versión | Rol |
+|---|---|---|
+| React | 18 | Framework de componentes |
+| Vite | 5 | Dev server + bundler |
+| Tailwind CSS | 3 | Sistema de diseño responsive |
+| React Router | 6 | Navegación client-side |
+| nginx | 1.27 | Servidor de producción (Docker) |
+
+### Diagrama de capas (Frontend)
+
+```
+┌─────────────────────────────────────────────────────┐
+│  index.html  — Punto de montaje del DOM (#root)      │
+└──────────────────────────┬──────────────────────────┘
+                           │
+┌──────────────────────────▼──────────────────────────┐
+│  src/main.jsx  — Bootstrap React + StrictMode        │
+└──────────────────────────┬──────────────────────────┘
+                           │
+┌──────────────────────────▼──────────────────────────┐
+│  src/App.jsx  — BrowserRouter + Routes               │
+│  · Declara rutas de módulos                          │
+│  · Envuelve todo en <Layout />                       │
+└──────┬───────────────────────────────────────────────┘
+       │
+┌──────▼──────────────────────────────────────────────┐
+│  src/components/layout/  — Shell de la aplicación   │
+│  ├── Layout.jsx   — Orquesta header + sidebar + main │
+│  ├── Header.jsx   — Logo, hamburger (móvil), Login   │
+│  └── Sidebar.jsx  — Nav lateral responsive           │
+└──────┬──────────────────────────────────────────────┘
+       │  <Outlet /> — React Router
+┌──────▼──────────────────────────────────────────────┐
+│  src/pages/   — Una página por módulo de negocio     │
+│  ├── Dashboard.jsx   (HU004 — placeholder)           │
+│  ├── Inventory.jsx   (HU siguiente)                  │
+│  ├── Orders.jsx      (HU siguiente)                  │
+│  └── ...                                             │
+└─────────────────────────────────────────────────────┘
+       │  fetch /api/v1/...
+┌──────▼──────────────────────────────────────────────┐
+│  Go API REST  (puerto 8080)                          │
+└─────────────────────────────────────────────────────┘
+```
+
+### Comportamiento responsive
+
+```
+Desktop (≥ 768px)               Mobile (< 768px)
+┌───────────────────────────┐   ┌───────────────────────────┐
+│ Header (full width)       │   │ Header + 🍔 hamburger     │
+├──────────┬────────────────┤   ├───────────────────────────┤
+│ Sidebar  │  Main Content  │   │  Main Content (full width)│
+│ 240px    │  flex-1        │   │                           │
+│ (fixed)  │                │   │  [sidebar oculto por css] │
+└──────────┴────────────────┘   └───────────────────────────┘
+```
+
+### URLs de acceso
+
+| Entorno | URL |
+|---|---|
+| Desarrollo (`npm run dev`) | `http://localhost:3000` |
+| Docker Compose | `http://localhost:3000` |
+| API (proxy automático) | `http://localhost:3000/api/v1/...` |
+
+---
+
 ## Decisiones de diseño
 
 Ver [docs/decisions.md](decisions.md) para el registro completo de decisiones arquitectónicas (ADRs).
