@@ -21,7 +21,7 @@ services:
       MYSQL_USER: baruser
       MYSQL_PASSWORD: barpassword
     ports:
-      - "3306:3306"          # acceso desde tu máquina (DBeaver, etc.)
+      - "3309:3306"          # acceso desde tu máquina (DBeaver, etc.)
     volumes:
       - mysql_data:/var/lib/mysql   # persistencia en disco
     healthcheck:
