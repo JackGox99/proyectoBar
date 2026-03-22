@@ -22,7 +22,7 @@ func Connect(cfg *config.Config) *gorm.DB {
 		log.Fatalf("Error conectando a la base de datos: %v", err)
 	}
 
-	log.Println("Conexión a la base de datos exitosa")
+	log.Println("Database connection established successfully.")
 	return db
 }
 
