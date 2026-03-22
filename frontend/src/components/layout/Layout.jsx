@@ -47,21 +47,14 @@ export default function Layout() {
           - On desktop: pushed right by sidebar width via left margin
           - On mobile: full width (sidebar overlays on top)
       */}
+      {/* md:ml-60 = 240px = sidebar width; matches --sidebar-width CSS var */}
       <main
-        className="transition-all duration-200"
+        className="md:ml-60 transition-all duration-200"
         style={{
           marginTop: 'var(--header-height)',
-          marginLeft: 0,
           minHeight: 'calc(100dvh - var(--header-height))',
         }}
       >
-        {/* Responsive margin — Tailwind can't reference CSS vars so we use a style tag trick */}
-        <style>{`
-          @media (min-width: 768px) {
-            main { margin-left: var(--sidebar-width); }
-          }
-        `}</style>
-
         <div className="p-4 md:p-6 lg:p-8">
           <Outlet />
         </div>
