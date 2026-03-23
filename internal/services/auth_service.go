@@ -6,6 +6,8 @@ import (
 	"bar-inventory-api/config"
 	"bar-inventory-api/internal/models"
 	"bar-inventory-api/internal/repository"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 // TokenClaims contiene la información extraída de un JWT válido.
@@ -33,14 +35,29 @@ func NewAuthService(userRepo repository.UserRepository, cfg *config.Config) Auth
 	return &authService{userRepo: userRepo, cfg: cfg}
 }
 
-// Login autentica un usuario y devuelve un JWT firmado.
-// TODO (HU-Auth): verificar password hash con bcrypt y generar JWT con golang-jwt/jwt.
+// Login autentica un usuario verificando su contraseña contra el hash almacenado (HU005).
+// Siempre devuelve el mismo mensaje de error para email y password incorrectos,
+// evitando filtrar si el email existe o no (seguridad por enumeración).
+// TODO (HU-JWT): generar y retornar un JWT firmado con s.cfg.JWTSecret.
 func (s *authService) Login(email, password string) (string, error) {
-	return "", errors.New("not implemented: pendiente HU de autenticación")
+	user, err := s.userRepo.FindByEmail(email)
+	if err != nil {
+		// Email no encontrado: devolvemos error genérico para no filtrar información.
+		return "", errors.New("credenciales inválidas")
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
+		// Password incorrecta: mismo mensaje genérico.
+		return "", errors.New("credenciales inválidas")
+	}
+
+	// TODO (HU-JWT): construir claims con user.ID, user.Email, user.Rol
+	// y firmar el token con golang-jwt/jwt usando s.cfg.JWTSecret.
+	return "", errors.New("not implemented: JWT pendiente HU de autenticación")
 }
 
 // ValidateToken verifica la firma y vigencia de un JWT y extrae sus claims.
-// TODO (HU-Auth): implementar con golang-jwt/jwt usando s.cfg.JWTSecret.
+// TODO (HU-JWT): implementar con golang-jwt/jwt usando s.cfg.JWTSecret.
 func (s *authService) ValidateToken(token string) (*TokenClaims, error) {
-	return nil, errors.New("not implemented: pendiente HU de autenticación")
+	return nil, errors.New("not implemented: JWT pendiente HU de autenticación")
 }
