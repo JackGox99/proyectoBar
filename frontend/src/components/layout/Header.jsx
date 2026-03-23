@@ -1,27 +1,32 @@
+import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../../context/AuthContext'
+
 /**
- * Header
+ * Header — fixed top bar.
  *
- * Fixed top bar containing:
- *  - Hamburger button (mobile only, md:hidden) to toggle sidebar
- *  - Bar name / brand logo
- *  - Login button (right side)
- *
- * Props:
- *  onMenuToggle — callback that flips sidebar open/closed on mobile
+ * When authenticated: shows user name + role badge + Logout button.
+ * When unauthenticated: shows Login button (redirects to /login).
  */
 export default function Header({ onMenuToggle }) {
+  const { user, logout, isAuthenticated } = useAuth()
+  const navigate = useNavigate()
+
+  function handleLogout() {
+    logout()
+    navigate('/login', { replace: true })
+  }
+
   return (
     <header
       className="fixed top-0 left-0 right-0 z-30 flex items-center justify-between px-4"
       style={{
-        height: 'var(--header-height)',
+        height:          'var(--header-height)',
         backgroundColor: 'var(--color-bg-surface)',
-        borderBottom: '1px solid var(--color-border)',
+        borderBottom:    '1px solid var(--color-border)',
       }}
     >
-      {/* Left: hamburger (mobile) + brand name */}
+      {/* Left: hamburger (mobile) + brand */}
       <div className="flex items-center gap-3">
-        {/* Hamburger — visible only below md breakpoint */}
         <button
           onClick={onMenuToggle}
           aria-label="Toggle navigation menu"
@@ -34,9 +39,7 @@ export default function Header({ onMenuToggle }) {
           <span className="block w-5 h-0.5 bg-[var(--color-text-primary)]" />
         </button>
 
-        {/* Brand */}
         <div className="flex items-center gap-2">
-          {/* Gold accent square acts as logo mark */}
           <span
             className="hidden xs:block w-7 h-7 rounded-sm flex-shrink-0"
             style={{ backgroundColor: 'var(--color-brand-primary)' }}
@@ -48,10 +51,29 @@ export default function Header({ onMenuToggle }) {
         </div>
       </div>
 
-      {/* Right: Login button */}
-      <button className="btn-primary text-sm">
-        Login
-      </button>
+      {/* Right: user info + logout OR login button */}
+      {isAuthenticated ? (
+        <div className="flex items-center gap-3">
+          {/* User name + role */}
+          <div className="hidden sm:flex flex-col items-end">
+            <span className="text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>
+              {user.nombre}
+            </span>
+            <span className="text-xs capitalize" style={{ color: 'var(--color-text-muted)' }}>
+              {user.rol}
+            </span>
+          </div>
+
+          {/* Logout */}
+          <button onClick={handleLogout} className="btn-ghost text-sm">
+            Logout
+          </button>
+        </div>
+      ) : (
+        <button onClick={() => navigate('/login')} className="btn-primary text-sm">
+          Login
+        </button>
+      )}
     </header>
   )
 }

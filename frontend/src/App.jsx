@@ -1,29 +1,51 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import Layout from './components/layout/Layout'
-import Dashboard from './pages/Dashboard'
+import { AuthProvider } from './context/AuthContext'
+import ProtectedRoute   from './components/ProtectedRoute'
+import Layout           from './components/layout/Layout'
+import Login            from './pages/Login'
+import Dashboard        from './pages/Dashboard'
 
 /**
  * App — router root.
- * All protected routes are wrapped by Layout (Header + Sidebar + main area).
- * Future routes (inventory, orders, users, reports) are added inside Layout's Routes.
+ *
+ * Public routes:  /login
+ * Protected routes (require auth): everything under Layout
+ *
+ * Post-login navigation (HU006):
+ *  - admin        → /users
+ *  - cajero/mesero → /dashboard
  */
 export default function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Layout />}>
-          <Route index element={<Dashboard />} />
-          {/* Future module routes go here:
-            <Route path="inventory"  element={<Inventory />} />
-            <Route path="orders"     element={<Orders />} />
-            <Route path="users"      element={<Users />} />
-            <Route path="reports"    element={<Reports />} />
-          */}
-        </Route>
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          {/* Public */}
+          <Route path="/login" element={<Login />} />
 
-        {/* Catch-all redirect to dashboard */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </BrowserRouter>
+          {/* Protected — wrapped by Layout (Header + Sidebar) */}
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <Layout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<Navigate to="/dashboard" replace />} />
+            <Route path="dashboard" element={<Dashboard />} />
+            {/* Future module routes:
+              <Route path="users"     element={<Users />} />
+              <Route path="inventory" element={<Inventory />} />
+              <Route path="orders"    element={<Orders />} />
+              <Route path="reports"   element={<Reports />} />
+            */}
+          </Route>
+
+          {/* Catch-all */}
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   )
 }
