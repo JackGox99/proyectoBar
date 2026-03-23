@@ -28,12 +28,12 @@ func NewUserRepository(db *gorm.DB) UserRepository {
 
 func (r *userRepository) FindAll() ([]models.User, error) {
 	var users []models.User
-	return users, r.db.Find(&users).Error
+	return users, r.db.Preload("Sede").Find(&users).Error
 }
 
 func (r *userRepository) FindByID(id uint) (*models.User, error) {
 	var user models.User
-	return &user, r.db.First(&user, id).Error
+	return &user, r.db.Preload("Sede").First(&user, id).Error
 }
 
 func (r *userRepository) FindByEmail(email string) (*models.User, error) {
