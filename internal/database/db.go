@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 
@@ -46,13 +47,14 @@ func AutoMigrate(db *gorm.DB) {
 
 func Seed(db *gorm.DB) {
 	seedSedes(db)
+	seedUsuarios(db)
 }
 
 func seedSedes(db *gorm.DB) {
 	var count int64
 	db.Model(&models.Venue{}).Count(&count)
 	if count > 0 {
-		return // ya tiene datos, no vuelve a insertar
+		return
 	}
 
 	sedes := []models.Venue{
@@ -66,4 +68,79 @@ func seedSedes(db *gorm.DB) {
 		return
 	}
 	log.Println("Seed: sedes insertadas")
+}
+
+func seedUsuarios(db *gorm.DB) {
+	var count int64
+	db.Model(&models.User{}).Count(&count)
+	if count > 0 {
+		return // ya tiene usuarios, no vuelve a insertar
+	}
+
+	// Obtener las sedes creadas previamente
+	var sedes []models.Venue
+	if err := db.Find(&sedes).Error; err != nil || len(sedes) < 3 {
+		log.Println("Seed usuarios: no se encontraron las 3 sedes, abortando")
+		return
+	}
+
+	// Mapear sedes por nombre para mayor claridad
+	sedeID := map[string]uint{}
+	for _, s := range sedes {
+		sedeID[s.Nombre] = s.ID
+	}
+
+	// Definición de usuarios a crear
+	// Formato: email, nombre, rol, sedeNombre ("" = admin global sin sede)
+	type usuarioSeed struct {
+		Email    string
+		Nombre   string
+		Password string
+		Rol      models.RolUsuario
+		Sede     string
+	}
+
+	seeds := []usuarioSeed{
+		// Admin global (sin sede)
+		{"admin@bar.com", "Admin Principal", "admin123", models.RolAdmin, ""},
+
+		// Galerías
+		{"cajero.galerias@bar.com", "Carlos Galerías", "cajero123", models.RolCajero, "Galerías"},
+		{"mesero.galerias@bar.com", "María Galerías", "mesero123", models.RolMesero, "Galerías"},
+
+		// Restrepo
+		{"cajero.restrepo@bar.com", "Luis Restrepo", "cajero123", models.RolCajero, "Restrepo"},
+		{"mesero.restrepo@bar.com", "Ana Restrepo", "mesero123", models.RolMesero, "Restrepo"},
+
+		// Zona T
+		{"cajero.zonat@bar.com", "Pedro Zona T", "cajero123", models.RolCajero, "Zona T"},
+		{"mesero.zonat@bar.com", "Laura Zona T", "mesero123", models.RolMesero, "Zona T"},
+	}
+
+	for _, s := range seeds {
+		hash, err := bcrypt.GenerateFromPassword([]byte(s.Password), 12)
+		if err != nil {
+			log.Printf("Seed usuarios: error hasheando password para %s: %v", s.Email, err)
+			continue
+		}
+
+		u := models.User{
+			Email:        s.Email,
+			Nombre:       s.Nombre,
+			PasswordHash: string(hash),
+			Rol:          s.Rol,
+			Activo:       true,
+		}
+
+		if s.Sede != "" {
+			id := sedeID[s.Sede]
+			u.SedeID = &id
+		}
+
+		if err := db.Create(&u).Error; err != nil {
+			log.Printf("Seed usuarios: error creando %s: %v", s.Email, err)
+		}
+	}
+
+	log.Println("Seed: usuarios insertados")
 }
