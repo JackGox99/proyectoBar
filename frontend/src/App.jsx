@@ -4,6 +4,7 @@ import ProtectedRoute   from './components/ProtectedRoute'
 import Layout           from './components/layout/Layout'
 import Login            from './pages/Login'
 import Dashboard        from './pages/Dashboard'
+import Users            from './pages/Users'
 
 /**
  * App — router root.
@@ -34,8 +35,8 @@ export default function App() {
           >
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<Dashboard />} />
+            <Route path="users"     element={<Users />} />
             {/* Future module routes:
-              <Route path="users"     element={<Users />} />
               <Route path="inventory" element={<Inventory />} />
               <Route path="orders"    element={<Orders />} />
               <Route path="reports"   element={<Reports />} />
