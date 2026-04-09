@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../context/AuthContext'
+import CreateUserModal from '../components/users/CreateUserModal'
 
 // Map Spanish roles to English display labels
 const ROLE_LABELS = {
@@ -16,19 +17,51 @@ const ROLE_BADGE = {
 }
 
 /**
- * Users — User Management List (HU007).
+ * Users — User Management List (HU007) + Create New User (HU008).
  * Only accessible by admin role; others see "Access Denied".
  */
 export default function Users() {
   const { user: currentUser } = useAuth()
 
-  const [users,   setUsers]   = useState([])
-  const [search,  setSearch]  = useState('')
-  const [loading, setLoading] = useState(true)
-  const [error,   setError]   = useState('')
+  const [users,    setUsers]    = useState([])
+  const [search,   setSearch]   = useState('')
+  const [loading,  setLoading]  = useState(true)
+  const [error,    setError]    = useState('')
+  const [modalOpen, setModalOpen] = useState(false)
+  const [toast,    setToast]    = useState('')
 
   // Security: block non-admin users on the frontend
-  if (currentUser?.rol !== 'admin') {
+  const isAdmin = currentUser?.rol === 'admin'
+
+  const fetchUsers = useCallback(async () => {
+    if (!isAdmin) return
+    setLoading(true)
+    try {
+      const res = await fetch('/api/v1/users', {
+        headers: { Authorization: `Bearer ${currentUser?.token ?? ''}` },
+      })
+      if (!res.ok) throw new Error('Failed to load users')
+      const data = await res.json()
+      setUsers(data)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }, [isAdmin, currentUser?.token])
+
+  useEffect(() => {
+    fetchUsers()
+  }, [fetchUsers])
+
+  // Auto-dismiss the success toast after a few seconds.
+  useEffect(() => {
+    if (!toast) return
+    const t = setTimeout(() => setToast(''), 3500)
+    return () => clearTimeout(t)
+  }, [toast])
+
+  if (!isAdmin) {
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-4">
         <span className="text-5xl" aria-hidden="true">🔒</span>
@@ -42,31 +75,30 @@ export default function Users() {
     )
   }
 
-  useEffect(() => {
-    async function fetchUsers() {
-      try {
-        const res = await fetch('/api/v1/users', {
-          headers: { Authorization: `Bearer ${currentUser?.token ?? ''}` },
-        })
-        if (!res.ok) throw new Error('Failed to load users')
-        const data = await res.json()
-        setUsers(data)
-      } catch (err) {
-        setError(err.message)
-      } finally {
-        setLoading(false)
-      }
-    }
-    fetchUsers()
-  }, [])
-
-  // Filter by name (case-insensitive)
-  const filtered = users.filter((u) =>
-    u.nombre.toLowerCase().includes(search.toLowerCase())
-  )
+  // Filter by name or username (case-insensitive)
+  const filtered = users.filter((u) => {
+    const q = search.toLowerCase()
+    return (
+      u.nombre?.toLowerCase().includes(q) ||
+      u.username?.toLowerCase().includes(q)
+    )
+  })
 
   return (
     <div>
+      {/* Success toast (HU008) */}
+      {toast && (
+        <div
+          className="fixed top-4 right-4 z-50 px-4 py-3 rounded-md text-sm font-medium shadow-lg"
+          style={{
+            backgroundColor: 'var(--color-success)',
+            color:           '#fff',
+          }}
+        >
+          {toast}
+        </div>
+      )}
+
       {/* Page header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
@@ -85,7 +117,7 @@ export default function Users() {
           style={{ backgroundColor: 'var(--color-success)', color: '#fff' }}
           onMouseEnter={(e) => (e.currentTarget.style.filter = 'brightness(1.1)')}
           onMouseLeave={(e) => (e.currentTarget.style.filter = 'none')}
-          onClick={() => {/* TODO HU-AddUser */}}
+          onClick={() => setModalOpen(true)}
         >
           + Add New User
         </button>
@@ -95,7 +127,7 @@ export default function Users() {
       <div className="mb-4">
         <input
           type="text"
-          placeholder="Search by name..."
+          placeholder="Search by name or username..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="w-full sm:w-72 px-3 py-2 rounded-md text-sm outline-none transition-colors duration-150"
@@ -177,10 +209,10 @@ export default function Users() {
                       {String(u.id).padStart(2, '0')}
                     </td>
 
-                    {/* Username (email before @) */}
+                    {/* Username */}
                     <td className="px-4 py-3 font-medium"
                       style={{ color: 'var(--color-text-primary)' }}>
-                      {u.email ? u.email.split('@')[0] : '—'}
+                      {u.username ?? '—'}
                     </td>
 
                     {/* Full Name */}
@@ -228,6 +260,16 @@ export default function Users() {
           </div>
         )}
       </div>
+
+      {/* Create user modal (HU008) */}
+      <CreateUserModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onCreated={() => {
+          setToast('User created successfully')
+          fetchUsers()
+        }}
+      />
     </div>
   )
 }

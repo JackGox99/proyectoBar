@@ -27,7 +27,7 @@ export default function Login() {
       const res = await fetch('/api/v1/auth/login', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ email: username, password }),
+        body:    JSON.stringify({ username, password }),
       })
 
       const data = await res.json()
@@ -115,7 +115,7 @@ export default function Login() {
             </label>
             <input
               id="username"
-              type="email"
+              type="text"
               autoComplete="username"
               placeholder="Enter your username"
               value={username}

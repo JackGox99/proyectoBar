@@ -17,8 +17,13 @@ func NewAuthController(service services.AuthService) *AuthController {
 	return &AuthController{service: service}
 }
 
+// loginRequest acepta `username` como identificador primario (HU008).
+// Mantiene `email` opcional para compatibilidad con clientes antiguos: si se
+// envía email y no username, se usa como username (el valor que identificaba
+// al usuario antes de HU008 era precisamente el email completo).
 type loginRequest struct {
-	Email    string `json:"email"    binding:"required,email"`
+	Username string `json:"username"`
+	Email    string `json:"email"`
 	Password string `json:"password" binding:"required"`
 }
 
@@ -35,8 +40,17 @@ func (ac *AuthController) Login(c *gin.Context) {
 		return
 	}
 
-	// Verifica bcrypt (HU005) y retorna rol + sede (HU006).
-	resp, err := ac.service.Login(req.Email, req.Password)
+	identifier := req.Username
+	if identifier == "" {
+		identifier = req.Email
+	}
+	if identifier == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "username is required"})
+		return
+	}
+
+	// Verifica bcrypt (HU005), emite JWT firmado (HU008) y retorna rol + sede (HU006).
+	resp, err := ac.service.Login(identifier, req.Password)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return

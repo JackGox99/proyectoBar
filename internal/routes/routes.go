@@ -9,6 +9,8 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"bar-inventory-api/internal/controllers"
+	"bar-inventory-api/internal/middleware"
+	"bar-inventory-api/internal/models"
 )
 
 // Controllers agrupa todos los controllers del sistema.
@@ -17,6 +19,7 @@ import (
 type Controllers struct {
 	Auth      *controllers.AuthController
 	User      *controllers.UserController
+	Venue     *controllers.VenueController
 	Category  *controllers.CategoryController
 	Product   *controllers.ProductController
 	Inventory *controllers.InventoryController
@@ -48,14 +51,23 @@ func Register(r *gin.Engine, ctrl Controllers, authMiddleware gin.HandlerFunc) {
 	// ── Rutas protegidas (requieren JWT) ──────────────────────────────────────
 	protected := api.Group("", authMiddleware)
 
-	// Users
+	// Users — HU008: POST/PUT/DELETE restringidos a rol admin (RBAC).
+	// List/GetByID quedan abiertas a cualquier usuario autenticado (útil en
+	// dashboards futuros); ajústese con RequireRole si se endurece la política.
+	adminOnly := middleware.RequireRole(models.RolAdmin)
 	users := protected.Group("/users")
 	{
 		users.GET("", ctrl.User.List)
 		users.GET("/:id", ctrl.User.GetByID)
-		users.POST("", ctrl.User.Create)
-		users.PUT("/:id", ctrl.User.Update)
-		users.DELETE("/:id", ctrl.User.Delete)
+		users.POST("", adminOnly, ctrl.User.Create)
+		users.PUT("/:id", adminOnly, ctrl.User.Update)
+		users.DELETE("/:id", adminOnly, ctrl.User.Delete)
+	}
+
+	// Venues — solo lectura, usado por el selector Location en HU008.
+	venues := protected.Group("/venues")
+	{
+		venues.GET("", ctrl.Venue.List)
 	}
 
 	// Categories
