@@ -90,9 +90,10 @@ func seedUsuarios(db *gorm.DB) {
 		sedeID[s.Nombre] = s.ID
 	}
 
-	// Definición de usuarios a crear
-	// Formato: email, nombre, rol, sedeNombre ("" = admin global sin sede)
+	// Definición de usuarios a crear (HU008: identificador primario = username).
+	// Formato: username, email, nombre, rol, sedeNombre ("" = admin global sin sede)
 	type usuarioSeed struct {
+		Username string
 		Email    string
 		Nombre   string
 		Password string
@@ -102,30 +103,32 @@ func seedUsuarios(db *gorm.DB) {
 
 	seeds := []usuarioSeed{
 		// Admin global (sin sede)
-		{"admin@bar.com", "Admin Principal", "admin123", models.RolAdmin, ""},
+		{"admin", "admin@bar.com", "Admin Principal", "admin123", models.RolAdmin, ""},
 
 		// Galerías
-		{"cajero.galerias@bar.com", "Carlos Galerías", "cajero123", models.RolCajero, "Galerías"},
-		{"mesero.galerias@bar.com", "María Galerías", "mesero123", models.RolMesero, "Galerías"},
+		{"cajero.galerias", "cajero.galerias@bar.com", "Carlos Galerías", "cajero123", models.RolCajero, "Galerías"},
+		{"mesero.galerias", "mesero.galerias@bar.com", "María Galerías", "mesero123", models.RolMesero, "Galerías"},
 
 		// Restrepo
-		{"cajero.restrepo@bar.com", "Luis Restrepo", "cajero123", models.RolCajero, "Restrepo"},
-		{"mesero.restrepo@bar.com", "Ana Restrepo", "mesero123", models.RolMesero, "Restrepo"},
+		{"cajero.restrepo", "cajero.restrepo@bar.com", "Luis Restrepo", "cajero123", models.RolCajero, "Restrepo"},
+		{"mesero.restrepo", "mesero.restrepo@bar.com", "Ana Restrepo", "mesero123", models.RolMesero, "Restrepo"},
 
 		// Zona T
-		{"cajero.zonat@bar.com", "Pedro Zona T", "cajero123", models.RolCajero, "Zona T"},
-		{"mesero.zonat@bar.com", "Laura Zona T", "mesero123", models.RolMesero, "Zona T"},
+		{"cajero.zonat", "cajero.zonat@bar.com", "Pedro Zona T", "cajero123", models.RolCajero, "Zona T"},
+		{"mesero.zonat", "mesero.zonat@bar.com", "Laura Zona T", "mesero123", models.RolMesero, "Zona T"},
 	}
 
 	for _, s := range seeds {
 		hash, err := bcrypt.GenerateFromPassword([]byte(s.Password), 12)
 		if err != nil {
-			log.Printf("Seed usuarios: error hasheando password para %s: %v", s.Email, err)
+			log.Printf("Seed usuarios: error hasheando password para %s: %v", s.Username, err)
 			continue
 		}
 
+		email := s.Email
 		u := models.User{
-			Email:        s.Email,
+			Username:     s.Username,
+			Email:        &email,
 			Nombre:       s.Nombre,
 			PasswordHash: string(hash),
 			Rol:          s.Rol,
@@ -138,7 +141,7 @@ func seedUsuarios(db *gorm.DB) {
 		}
 
 		if err := db.Create(&u).Error; err != nil {
-			log.Printf("Seed usuarios: error creando %s: %v", s.Email, err)
+			log.Printf("Seed usuarios: error creando %s: %v", s.Username, err)
 		}
 	}
 

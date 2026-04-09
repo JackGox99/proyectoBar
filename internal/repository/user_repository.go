@@ -11,6 +11,7 @@ import (
 type UserRepository interface {
 	FindAll() ([]models.User, error)
 	FindByID(id uint) (*models.User, error)
+	FindByUsername(username string) (*models.User, error)
 	FindByEmail(email string) (*models.User, error)
 	Create(u *models.User) error
 	Update(u *models.User) error
@@ -36,9 +37,14 @@ func (r *userRepository) FindByID(id uint) (*models.User, error) {
 	return &user, r.db.Preload("Sede").First(&user, id).Error
 }
 
+func (r *userRepository) FindByUsername(username string) (*models.User, error) {
+	var user models.User
+	return &user, r.db.Preload("Sede").Where("username = ?", username).First(&user).Error
+}
+
 func (r *userRepository) FindByEmail(email string) (*models.User, error) {
 	var user models.User
-	return &user, r.db.Where("email = ?", email).First(&user).Error
+	return &user, r.db.Preload("Sede").Where("email = ?", email).First(&user).Error
 }
 
 func (r *userRepository) Create(u *models.User) error {

@@ -55,6 +55,7 @@ func (s *Server) setupMiddleware() {
 func (s *Server) setupRoutes() {
 	// ── Capa de Repositorios ──────────────────────────────────────────────────
 	userRepo      := repository.NewUserRepository(s.db)
+	venueRepo     := repository.NewVenueRepository(s.db)
 	categoryRepo  := repository.NewCategoryRepository(s.db)
 	productRepo   := repository.NewProductRepository(s.db)
 	inventoryRepo := repository.NewInventoryRepository(s.db)
@@ -63,7 +64,8 @@ func (s *Server) setupRoutes() {
 
 	// ── Capa de Servicios ─────────────────────────────────────────────────────
 	authSvc      := services.NewAuthService(userRepo, s.cfg)
-	userSvc      := services.NewUserService(userRepo)
+	venueSvc     := services.NewVenueService(venueRepo)
+	userSvc      := services.NewUserService(userRepo, venueSvc)
 	categorySvc  := services.NewCategoryService(categoryRepo)
 	productSvc   := services.NewProductService(productRepo, categoryRepo)
 	inventorySvc := services.NewInventoryService(inventoryRepo)
@@ -74,6 +76,7 @@ func (s *Server) setupRoutes() {
 	ctrl := routes.Controllers{
 		Auth:      controllers.NewAuthController(authSvc),
 		User:      controllers.NewUserController(userSvc),
+		Venue:     controllers.NewVenueController(venueSvc),
 		Category:  controllers.NewCategoryController(categorySvc),
 		Product:   controllers.NewProductController(productSvc),
 		Inventory: controllers.NewInventoryController(inventorySvc),
@@ -82,5 +85,7 @@ func (s *Server) setupRoutes() {
 	}
 
 	// ── Registro de Rutas ─────────────────────────────────────────────────────
-	routes.Register(s.router, ctrl, middleware.AuthRequired())
+	// El middleware AuthRequired valida el JWT y carga los claims en el contexto
+	// para que RequireRole (aplicado en routes.go) pueda autorizar por rol (HU008).
+	routes.Register(s.router, ctrl, middleware.AuthRequired(authSvc))
 }
