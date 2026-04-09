@@ -1,10 +1,13 @@
 package services
 
 import (
+	"errors"
+
 	"bar-inventory-api/internal/models"
 	"bar-inventory-api/internal/repository"
 
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 // UserService define el contrato de lógica de negocio para usuarios.
@@ -14,6 +17,7 @@ type UserService interface {
 	GetByID(id uint) (*models.User, error)
 	// Create recibe el usuario y la contraseña en texto plano.
 	// El servicio es responsable de hashearla antes de persistir (HU005).
+	// Valida unicidad del username y las reglas de negocio rol/sede (HU008).
 	Create(u *models.User, plainPassword string) error
 	// Update recibe newPlainPassword vacío si no se quiere cambiar la contraseña.
 	Update(u *models.User, newPlainPassword string) error
@@ -21,11 +25,12 @@ type UserService interface {
 }
 
 type userService struct {
-	repo repository.UserRepository
+	repo     repository.UserRepository
+	venueSvc VenueService
 }
 
-func NewUserService(repo repository.UserRepository) UserService {
-	return &userService{repo: repo}
+func NewUserService(repo repository.UserRepository, venueSvc VenueService) UserService {
+	return &userService{repo: repo, venueSvc: venueSvc}
 }
 
 func (s *userService) List() ([]models.User, error) {
@@ -36,17 +41,43 @@ func (s *userService) GetByID(id uint) (*models.User, error) {
 	return s.repo.FindByID(id)
 }
 
-// Create persiste el usuario. Si se proporciona plainPassword, lo hashea con bcrypt
-// antes de guardar (HU005). Si viene vacío, el PasswordHash queda vacío hasta que
-// se establezca mediante Update.
+// Create persiste el usuario aplicando las reglas de negocio de HU008:
+//  1. El username debe ser único.
+//  2. Los roles "cajero" y "mesero" requieren una sede válida.
+//  3. El rol "admin" no debe tener sede asignada.
+//  4. La contraseña en texto plano se hashea con bcrypt cost 12 (HU005).
 func (s *userService) Create(u *models.User, plainPassword string) error {
-	if plainPassword != "" {
-		hash, err := bcrypt.GenerateFromPassword([]byte(plainPassword), 12)
-		if err != nil {
+	if plainPassword == "" {
+		return ErrPasswordRequired
+	}
+
+	if err := validateRoleSede(u.Rol, u.SedeID); err != nil {
+		return err
+	}
+
+	// Verifica que la sede exista cuando el rol la requiere.
+	if u.SedeID != nil {
+		if _, err := s.venueSvc.GetByID(*u.SedeID); err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrSedeNotFound
+			}
 			return err
 		}
-		u.PasswordHash = string(hash)
 	}
+
+	// Unicidad de username.
+	if existing, err := s.repo.FindByUsername(u.Username); err == nil && existing != nil {
+		return ErrUsernameTaken
+	} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(plainPassword), 12)
+	if err != nil {
+		return err
+	}
+	u.PasswordHash = string(hash)
+
 	return s.repo.Create(u)
 }
 
@@ -64,4 +95,21 @@ func (s *userService) Update(u *models.User, newPlainPassword string) error {
 
 func (s *userService) Delete(id uint) error {
 	return s.repo.Delete(id)
+}
+
+// validateRoleSede aplica la regla de negocio de HU008 sobre el binomio rol/sede.
+func validateRoleSede(rol models.RolUsuario, sedeID *uint) error {
+	switch rol {
+	case models.RolAdmin:
+		if sedeID != nil {
+			return ErrSedeNotAllowed
+		}
+	case models.RolCajero, models.RolMesero:
+		if sedeID == nil {
+			return ErrSedeRequired
+		}
+	default:
+		return ErrInvalidRole
+	}
+	return nil
 }
