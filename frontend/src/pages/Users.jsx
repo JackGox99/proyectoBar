@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../context/AuthContext'
 import CreateUserModal from '../components/users/CreateUserModal'
+import EditUserModal from '../components/users/EditUserModal'
 
 // Map Spanish roles to English display labels
 const ROLE_LABELS = {
@@ -28,6 +29,7 @@ export default function Users() {
   const [loading,  setLoading]  = useState(true)
   const [error,    setError]    = useState('')
   const [modalOpen, setModalOpen] = useState(false)
+  const [editUser, setEditUser]  = useState(null)
   const [toast,    setToast]    = useState('')
 
   // Security: block non-admin users on the frontend
@@ -165,7 +167,7 @@ export default function Users() {
           <table className="w-full text-sm border-collapse min-w-[560px]">
             <thead>
               <tr style={{ backgroundColor: 'var(--color-bg-elevated)' }}>
-                {['ID', 'Username', 'Full Name', 'Role', 'Location'].map((col) => (
+                {['ID', 'Username', 'Full Name', 'Role', 'Location', 'Actions'].map((col) => (
                   <th
                     key={col}
                     className="px-4 py-3 text-left font-semibold text-xs uppercase tracking-wider"
@@ -180,14 +182,14 @@ export default function Users() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-10 text-center"
+                  <td colSpan={6} className="px-4 py-10 text-center"
                     style={{ color: 'var(--color-text-muted)' }}>
                     Loading...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-10 text-center"
+                  <td colSpan={6} className="px-4 py-10 text-center"
                     style={{ color: 'var(--color-text-muted)' }}>
                     No users found.
                   </td>
@@ -239,6 +241,23 @@ export default function Users() {
                       style={{ color: u.sede ? 'var(--color-text-primary)' : 'var(--color-text-muted)' }}>
                       {u.sede ? u.sede.nombre : '—'}
                     </td>
+
+                    {/* Actions (HU009) */}
+                    <td className="px-4 py-3">
+                      <button
+                        onClick={() => setEditUser(u)}
+                        className="px-3 py-1 rounded-md text-xs font-medium transition-colors duration-150"
+                        style={{
+                          backgroundColor: 'rgba(37,99,235,0.12)',
+                          color:           '#2563eb',
+                          border:          '1px solid rgba(37,99,235,0.3)',
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(37,99,235,0.25)')}
+                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'rgba(37,99,235,0.12)')}
+                      >
+                        Edit
+                      </button>
+                    </td>
                   </tr>
                 ))
               )}
@@ -267,6 +286,17 @@ export default function Users() {
         onClose={() => setModalOpen(false)}
         onCreated={() => {
           setToast('User created successfully')
+          fetchUsers()
+        }}
+      />
+
+      {/* Edit user permissions modal (HU009) */}
+      <EditUserModal
+        open={!!editUser}
+        user={editUser}
+        onClose={() => setEditUser(null)}
+        onUpdated={() => {
+          setToast('User permissions updated successfully')
           fetchUsers()
         }}
       />

@@ -7,7 +7,8 @@ services:
     container_name: proyectobar_frontend
     restart: unless-stopped
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     ports:
       - "3000:80"
 
@@ -37,6 +38,12 @@ services:
     depends_on:
       mysql:
         condition: service_healthy   # espera que MySQL esté listo
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
     environment:
       PORT: 8080
       DB_HOST: mysql                 # nombre del servicio, no localhost
