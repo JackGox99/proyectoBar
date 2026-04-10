@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { label: 'Products',   to: '/products',   icon: '🍺' },
   { label: 'Users',      to: '/users',      icon: '👤' },
   { label: 'Reports',    to: '/reports',    icon: '📊' },
+  { label: 'My Profile', to: '/profile',   icon: '🔑' },
 ]
 
 /**

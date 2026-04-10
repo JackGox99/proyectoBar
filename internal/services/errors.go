@@ -26,4 +26,10 @@ var (
 
 	// ErrPasswordRequired indica que no se proporcionó contraseña al crear.
 	ErrPasswordRequired = errors.New("password is required")
+
+	// ErrPasswordTooShort indica que la contraseña no cumple el mínimo de caracteres (HU010).
+	ErrPasswordTooShort = errors.New("password must be at least 8 characters long")
+
+	// ErrPasswordMismatch indica que las contraseñas no coinciden (HU010).
+	ErrPasswordMismatch = errors.New("passwords do not match")
 )

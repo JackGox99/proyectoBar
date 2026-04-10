@@ -19,6 +19,7 @@ import (
 type Controllers struct {
 	Auth      *controllers.AuthController
 	User      *controllers.UserController
+	Profile   *controllers.ProfileController
 	Venue     *controllers.VenueController
 	Category  *controllers.CategoryController
 	Product   *controllers.ProductController
@@ -50,6 +51,13 @@ func Register(r *gin.Engine, ctrl Controllers, authMiddleware gin.HandlerFunc) {
 
 	// ── Rutas protegidas (requieren JWT) ──────────────────────────────────────
 	protected := api.Group("", authMiddleware)
+
+	// Profile — HU010: cambio de contraseña del usuario autenticado.
+	// Cualquier usuario autenticado puede cambiar su propia contraseña.
+	profile := protected.Group("/profile")
+	{
+		profile.PUT("/password", ctrl.Profile.ChangePassword)
+	}
 
 	// Users — HU008: POST/PUT/DELETE restringidos a rol admin (RBAC).
 	// List/GetByID quedan abiertas a cualquier usuario autenticado (útil en

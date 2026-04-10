@@ -7,8 +7,7 @@ services:
     container_name: proyectobar_frontend
     restart: unless-stopped
     depends_on:
-      api:
-        condition: service_healthy
+      - api
     ports:
       - "3000:80"
 
@@ -43,7 +42,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
-      start_period: 10s
+      start_period: 30s
     environment:
       PORT: 8080
       DB_HOST: mysql                 # nombre del servicio, no localhost
