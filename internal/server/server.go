@@ -76,6 +76,7 @@ func (s *Server) setupRoutes() {
 	ctrl := routes.Controllers{
 		Auth:      controllers.NewAuthController(authSvc),
 		User:      controllers.NewUserController(userSvc),
+		Profile:   controllers.NewProfileController(userSvc),
 		Venue:     controllers.NewVenueController(venueSvc),
 		Category:  controllers.NewCategoryController(categorySvc),
 		Product:   controllers.NewProductController(productSvc),
