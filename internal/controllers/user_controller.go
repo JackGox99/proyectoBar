@@ -33,9 +33,15 @@ type createUserRequest struct {
 
 // updateUserRequest permite actualizar datos del usuario.
 // Password es opcional: si está vacío, no se cambia la contraseña.
+//
+// HU009: para soportar "Role and Location Assignment" el cliente puede enviar
+// `role` (en inglés, como en HU008) y/o `sede_id`. Cuando el nuevo rol es
+// admin, el backend fuerza `sede_id = nil`; cuando es cajero/mesero, exige
+// que haya una sede válida.
 type updateUserRequest struct {
 	Nombre   string            `json:"nombre"`
 	Rol      models.RolUsuario `json:"rol"`
+	Role     string            `json:"role"` // alias en inglés (HU009)
 	Activo   *bool             `json:"activo"`
 	Password string            `json:"password"` // mínimo 8 si se envía
 	SedeID   *uint             `json:"sede_id"`
@@ -130,6 +136,10 @@ func (uc *UserController) mapCreateError(c *gin.Context, err error) {
 	}
 }
 
+// Update implementa HU009 — Role and Location Assignment.
+// Acceso restringido a admin (aplicado vía middleware RequireRole en routes.go).
+// Permite modificar rol/sede (y opcionalmente nombre/password/activo) de un
+// usuario existente, aplicando las reglas de negocio de rol/sede.
 func (uc *UserController) Update(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
@@ -152,22 +162,46 @@ func (uc *UserController) Update(c *gin.Context) {
 	if req.Nombre != "" {
 		user.Nombre = req.Nombre
 	}
-	if req.Rol != "" {
-		user.Rol = req.Rol
-	}
 	if req.Activo != nil {
 		user.Activo = *req.Activo
 	}
-	if req.SedeID != nil {
+
+	// Normaliza el rol: acepta tanto el alias en inglés del mockup ("Waiter",
+	// "Cashier", "Admin") como el valor enum ("mesero", "cajero", "admin").
+	newRol := user.Rol
+	if req.Role != "" {
+		parsed := roleFromRequest(req.Role)
+		if parsed == "" {
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": services.ErrInvalidRole.Error()})
+			return
+		}
+		newRol = parsed
+	} else if req.Rol != "" {
+		newRol = req.Rol
+	}
+	user.Rol = newRol
+
+	// Ajusta la sede según el nuevo rol:
+	//  - admin:   acceso global, se fuerza sede_id = nil.
+	//  - otros:   se usa la sede enviada; si no se envió, conserva la actual,
+	//             y la validación posterior fallará si queda nil.
+	if newRol == models.RolAdmin {
+		user.SedeID = nil
+		user.Sede = nil
+	} else if req.SedeID != nil {
 		user.SedeID = req.SedeID
+		user.Sede = nil // dejar que el frontend recargue tras la respuesta
 	}
 
 	// Password vacío → el servicio no cambia el hash existente.
 	if err := uc.service.Update(user, req.Password); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		uc.mapCreateError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, user)
+	c.JSON(http.StatusOK, gin.H{
+		"message": "User permissions updated successfully",
+		"user":    user,
+	})
 }
 
 func (uc *UserController) Delete(c *gin.Context) {
