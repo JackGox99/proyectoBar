@@ -82,7 +82,22 @@ func (s *userService) Create(u *models.User, plainPassword string) error {
 }
 
 // Update rehashea la contraseña solo si se proporciona una nueva (no vacía).
+// Aplica las reglas de negocio rol/sede (HU008/HU009): los roles cajero/mesero
+// requieren sede y admin no puede tenerla; además valida que la sede exista.
 func (s *userService) Update(u *models.User, newPlainPassword string) error {
+	if err := validateRoleSede(u.Rol, u.SedeID); err != nil {
+		return err
+	}
+
+	if u.SedeID != nil {
+		if _, err := s.venueSvc.GetByID(*u.SedeID); err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrSedeNotFound
+			}
+			return err
+		}
+	}
+
 	if newPlainPassword != "" {
 		hash, err := bcrypt.GenerateFromPassword([]byte(newPlainPassword), 12)
 		if err != nil {
