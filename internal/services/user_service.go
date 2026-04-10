@@ -22,6 +22,9 @@ type UserService interface {
 	// Update recibe newPlainPassword vacío si no se quiere cambiar la contraseña.
 	Update(u *models.User, newPlainPassword string) error
 	Delete(id uint) error
+	// ChangePassword cambia la contraseña del usuario autenticado (HU010).
+	// Valida largo mínimo (8 chars) y que ambas contraseñas coincidan.
+	ChangePassword(userID uint, newPassword, confirmPassword string) error
 }
 
 type userService struct {
@@ -110,6 +113,31 @@ func (s *userService) Update(u *models.User, newPlainPassword string) error {
 
 func (s *userService) Delete(id uint) error {
 	return s.repo.Delete(id)
+}
+
+// ChangePassword implementa HU010: permite al usuario cambiar su propia contraseña.
+// Valida que ambas contraseñas coincidan y que cumplan el largo mínimo de 8 caracteres.
+// Hashea la nueva contraseña con bcrypt cost 12 (HU005) antes de persistir.
+func (s *userService) ChangePassword(userID uint, newPassword, confirmPassword string) error {
+	if newPassword != confirmPassword {
+		return ErrPasswordMismatch
+	}
+	if len(newPassword) < 8 {
+		return ErrPasswordTooShort
+	}
+
+	user, err := s.repo.FindByID(userID)
+	if err != nil {
+		return err
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), 12)
+	if err != nil {
+		return err
+	}
+	user.PasswordHash = string(hash)
+
+	return s.repo.Update(user)
 }
 
 // validateRoleSede aplica la regla de negocio de HU008 sobre el binomio rol/sede.
