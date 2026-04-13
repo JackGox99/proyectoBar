@@ -62,8 +62,11 @@ func roleFromRequest(role string) models.RolUsuario {
 	}
 }
 
+// List retorna los usuarios, opcionalmente ordenados por el query param `sort_by`.
+// Valores soportados: "username" (QuickSort), "nombre"/"name" (MergeSort).
 func (uc *UserController) List(c *gin.Context) {
-	users, err := uc.service.List()
+	sortBy := c.Query("sort_by")
+	users, err := uc.service.List(sortBy)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
