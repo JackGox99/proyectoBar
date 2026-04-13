@@ -32,4 +32,7 @@ var (
 
 	// ErrPasswordMismatch indica que las contraseñas no coinciden (HU010).
 	ErrPasswordMismatch = errors.New("passwords do not match")
+
+	// ErrUserInactive indica que el usuario está desactivado y no puede iniciar sesión (HU011).
+	ErrUserInactive = errors.New("user account is deactivated")
 )
