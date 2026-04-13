@@ -26,11 +26,14 @@ export default function Users() {
 
   const [users,    setUsers]    = useState([])
   const [search,   setSearch]   = useState('')
+  const [sortBy,   setSortBy]   = useState('')
   const [loading,  setLoading]  = useState(true)
   const [error,    setError]    = useState('')
   const [modalOpen, setModalOpen] = useState(false)
-  const [editUser, setEditUser]  = useState(null)
-  const [toast,    setToast]    = useState('')
+  const [editUser,      setEditUser]      = useState(null)
+  const [deactivateUser, setDeactivateUser] = useState(null)
+  const [deactivating,   setDeactivating]   = useState(false)
+  const [toast,          setToast]          = useState('')
 
   // Security: block non-admin users on the frontend
   const isAdmin = currentUser?.rol === 'admin'
@@ -39,7 +42,8 @@ export default function Users() {
     if (!isAdmin) return
     setLoading(true)
     try {
-      const res = await fetch('/api/v1/users', {
+      const url = sortBy ? `/api/v1/users?sort_by=${sortBy}` : '/api/v1/users'
+      const res = await fetch(url, {
         headers: { Authorization: `Bearer ${currentUser?.token ?? ''}` },
       })
       if (!res.ok) throw new Error('Failed to load users')
@@ -50,7 +54,7 @@ export default function Users() {
     } finally {
       setLoading(false)
     }
-  }, [isAdmin, currentUser?.token])
+  }, [isAdmin, currentUser?.token, sortBy])
 
   useEffect(() => {
     fetchUsers()
@@ -62,6 +66,29 @@ export default function Users() {
     const t = setTimeout(() => setToast(''), 3500)
     return () => clearTimeout(t)
   }, [toast])
+
+  async function handleDeactivate() {
+    if (!deactivateUser) return
+    setDeactivating(true)
+    try {
+      const res = await fetch(`/api/v1/users/${deactivateUser.id}/deactivate`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${currentUser?.token ?? ''}` },
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to deactivate user')
+      }
+      setToast('User deactivated successfully')
+      setDeactivateUser(null)
+      fetchUsers()
+    } catch (err) {
+      setError(err.message)
+      setDeactivateUser(null)
+    } finally {
+      setDeactivating(false)
+    }
+  }
 
   if (!isAdmin) {
     return (
@@ -125,8 +152,8 @@ export default function Users() {
         </button>
       </div>
 
-      {/* Search bar */}
-      <div className="mb-4">
+      {/* Search bar + Sort selector */}
+      <div className="mb-4 flex flex-col sm:flex-row gap-3">
         <input
           type="text"
           placeholder="Search by name or username..."
@@ -141,6 +168,21 @@ export default function Users() {
           onFocus={(e)  => (e.target.style.borderColor = 'var(--color-brand-primary)')}
           onBlur={(e)   => (e.target.style.borderColor = 'var(--color-border)')}
         />
+
+        <select
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value)}
+          className="px-3 py-2 rounded-md text-sm outline-none transition-colors duration-150"
+          style={{
+            backgroundColor: 'var(--color-bg-elevated)',
+            border:          '1px solid var(--color-border)',
+            color:           'var(--color-text-primary)',
+          }}
+        >
+          <option value="">Sort: Default</option>
+          <option value="username">Sort by Username (QuickSort)</option>
+          <option value="nombre">Sort by Full Name (MergeSort)</option>
+        </select>
       </div>
 
       {/* Error state */}
@@ -167,7 +209,7 @@ export default function Users() {
           <table className="w-full text-sm border-collapse min-w-[560px]">
             <thead>
               <tr style={{ backgroundColor: 'var(--color-bg-elevated)' }}>
-                {['ID', 'Username', 'Full Name', 'Role', 'Location', 'Actions'].map((col) => (
+                {['ID', 'Username', 'Full Name', 'Role', 'Location', 'Status', 'Actions'].map((col) => (
                   <th
                     key={col}
                     className="px-4 py-3 text-left font-semibold text-xs uppercase tracking-wider"
@@ -182,14 +224,14 @@ export default function Users() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center"
+                  <td colSpan={7} className="px-4 py-10 text-center"
                     style={{ color: 'var(--color-text-muted)' }}>
                     Loading...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center"
+                  <td colSpan={7} className="px-4 py-10 text-center"
                     style={{ color: 'var(--color-text-muted)' }}>
                     No users found.
                   </td>
@@ -242,21 +284,52 @@ export default function Users() {
                       {u.sede ? u.sede.nombre : '—'}
                     </td>
 
-                    {/* Actions (HU009) */}
+                    {/* Status (HU011) */}
                     <td className="px-4 py-3">
-                      <button
-                        onClick={() => setEditUser(u)}
-                        className="px-3 py-1 rounded-md text-xs font-medium transition-colors duration-150"
-                        style={{
-                          backgroundColor: 'rgba(37,99,235,0.12)',
-                          color:           '#2563eb',
-                          border:          '1px solid rgba(37,99,235,0.3)',
-                        }}
-                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(37,99,235,0.25)')}
-                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'rgba(37,99,235,0.12)')}
+                      <span
+                        className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
+                        style={u.activo
+                          ? { backgroundColor: 'rgba(76,175,80,0.15)', color: 'var(--color-success)' }
+                          : { backgroundColor: 'rgba(239,83,80,0.15)', color: 'var(--color-error)' }
+                        }
                       >
-                        Edit
-                      </button>
+                        {u.activo ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
+
+                    {/* Actions (HU009 / HU011) */}
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setEditUser(u)}
+                          className="px-3 py-1 rounded-md text-xs font-medium transition-colors duration-150"
+                          style={{
+                            backgroundColor: 'rgba(37,99,235,0.12)',
+                            color:           '#2563eb',
+                            border:          '1px solid rgba(37,99,235,0.3)',
+                          }}
+                          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(37,99,235,0.25)')}
+                          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'rgba(37,99,235,0.12)')}
+                        >
+                          Edit
+                        </button>
+                        {u.activo && (
+                          <button
+                            onClick={() => setDeactivateUser(u)}
+                            className="px-3 py-1 rounded-md text-xs font-medium transition-colors duration-150"
+                            style={{
+                              backgroundColor: 'rgba(239,83,80,0.12)',
+                              color:           'var(--color-error)',
+                              border:          '1px solid rgba(239,83,80,0.3)',
+                            }}
+                            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(239,83,80,0.25)')}
+                            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'rgba(239,83,80,0.12)')}
+                            title="Deactivate user"
+                          >
+                            Deactivate
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -300,6 +373,61 @@ export default function Users() {
           fetchUsers()
         }}
       />
+
+      {/* Deactivate confirmation modal (HU011) */}
+      {deactivateUser && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
+          onClick={() => setDeactivateUser(null)}
+        >
+          <div
+            className="w-full max-w-md mx-4 rounded-xl p-6"
+            style={{
+              backgroundColor: 'var(--color-bg-surface)',
+              border:          '1px solid var(--color-border)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2
+              className="text-lg font-bold mb-2"
+              style={{ color: 'var(--color-text-primary)' }}
+            >
+              Deactivate User
+            </h2>
+            <p className="text-sm mb-6" style={{ color: 'var(--color-text-muted)' }}>
+              You are about to deactivate <strong style={{ color: 'var(--color-text-primary)' }}>{deactivateUser.username}</strong>.
+              This user will no longer be able to access the system.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setDeactivateUser(null)}
+                disabled={deactivating}
+                className="px-4 py-2 rounded-md text-sm font-medium transition-colors duration-150"
+                style={{
+                  backgroundColor: 'var(--color-bg-elevated)',
+                  color:           'var(--color-text-primary)',
+                  border:          '1px solid var(--color-border)',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeactivate}
+                disabled={deactivating}
+                className="px-4 py-2 rounded-md text-sm font-semibold transition-colors duration-150"
+                style={{
+                  backgroundColor: deactivating ? 'var(--color-border)' : 'var(--color-error)',
+                  color:           '#fff',
+                  cursor:          deactivating ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {deactivating ? 'Deactivating...' : 'Confirm Deactivation'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

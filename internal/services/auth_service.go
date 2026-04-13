@@ -67,6 +67,11 @@ func (s *authService) Login(username, password string) (*LoginResponse, error) {
 		return nil, errors.New("invalid username or password")
 	}
 
+	// HU011: verificar que el usuario esté activo antes de permitir el login.
+	if !user.Activo {
+		return nil, ErrUserInactive
+	}
+
 	token, err := s.signJWT(user)
 	if err != nil {
 		return nil, fmt.Errorf("could not generate token: %w", err)

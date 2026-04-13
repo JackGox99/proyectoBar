@@ -2,7 +2,9 @@ package services
 
 import (
 	"errors"
+	"strings"
 
+	"bar-inventory-api/internal/algorithms"
 	"bar-inventory-api/internal/models"
 	"bar-inventory-api/internal/repository"
 
@@ -13,7 +15,9 @@ import (
 // UserService define el contrato de lógica de negocio para usuarios.
 // Actúa como capa de orquestación entre el controller y el repositorio (SRP).
 type UserService interface {
-	List() ([]models.User, error)
+	// List retorna todos los usuarios, opcionalmente ordenados.
+	// sortBy: "username" → QuickSort, "nombre" → MergeSort, "" → sin ordenar.
+	List(sortBy string) ([]models.User, error)
 	GetByID(id uint) (*models.User, error)
 	// Create recibe el usuario y la contraseña en texto plano.
 	// El servicio es responsable de hashearla antes de persistir (HU005).
@@ -25,6 +29,8 @@ type UserService interface {
 	// ChangePassword cambia la contraseña del usuario autenticado (HU010).
 	// Valida largo mínimo (8 chars) y que ambas contraseñas coincidan.
 	ChangePassword(userID uint, newPassword, confirmPassword string) error
+	// Deactivate desactiva la cuenta de un usuario (HU011 — eliminación lógica).
+	Deactivate(id uint) error
 }
 
 type userService struct {
@@ -36,8 +42,28 @@ func NewUserService(repo repository.UserRepository, venueSvc VenueService) UserS
 	return &userService{repo: repo, venueSvc: venueSvc}
 }
 
-func (s *userService) List() ([]models.User, error) {
-	return s.repo.FindAll()
+// List retorna los usuarios ordenados según el criterio indicado:
+//   - "username" → QuickSort (in-place, O(n log n) promedio)
+//   - "nombre"   → MergeSort (estable, O(n log n) garantizado)
+//   - cualquier otro valor → orden por defecto de la BD
+func (s *userService) List(sortBy string) ([]models.User, error) {
+	users, err := s.repo.FindAll()
+	if err != nil {
+		return nil, err
+	}
+
+	switch strings.ToLower(sortBy) {
+	case "username":
+		algorithms.QuickSort(users, func(a, b models.User) bool {
+			return strings.ToLower(a.Username) < strings.ToLower(b.Username)
+		})
+	case "nombre", "name":
+		users = algorithms.MergeSort(users, func(a, b models.User) bool {
+			return strings.ToLower(a.Nombre) < strings.ToLower(b.Nombre)
+		})
+	}
+
+	return users, nil
 }
 
 func (s *userService) GetByID(id uint) (*models.User, error) {
@@ -137,6 +163,17 @@ func (s *userService) ChangePassword(userID uint, newPassword, confirmPassword s
 	}
 	user.PasswordHash = string(hash)
 
+	return s.repo.Update(user)
+}
+
+// Deactivate implementa HU011: desactivación lógica de la cuenta de un usuario.
+// No elimina el registro — solo marca Activo = false para impedir futuros logins.
+func (s *userService) Deactivate(id uint) error {
+	user, err := s.repo.FindByID(id)
+	if err != nil {
+		return err
+	}
+	user.Activo = false
 	return s.repo.Update(user)
 }
 
