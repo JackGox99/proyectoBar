@@ -25,6 +25,8 @@ type UserService interface {
 	// ChangePassword cambia la contraseña del usuario autenticado (HU010).
 	// Valida largo mínimo (8 chars) y que ambas contraseñas coincidan.
 	ChangePassword(userID uint, newPassword, confirmPassword string) error
+	// Deactivate desactiva la cuenta de un usuario (HU011 — eliminación lógica).
+	Deactivate(id uint) error
 }
 
 type userService struct {
@@ -137,6 +139,17 @@ func (s *userService) ChangePassword(userID uint, newPassword, confirmPassword s
 	}
 	user.PasswordHash = string(hash)
 
+	return s.repo.Update(user)
+}
+
+// Deactivate implementa HU011: desactivación lógica de la cuenta de un usuario.
+// No elimina el registro — solo marca Activo = false para impedir futuros logins.
+func (s *userService) Deactivate(id uint) error {
+	user, err := s.repo.FindByID(id)
+	if err != nil {
+		return err
+	}
+	user.Activo = false
 	return s.repo.Update(user)
 }
 

@@ -69,6 +69,7 @@ func Register(r *gin.Engine, ctrl Controllers, authMiddleware gin.HandlerFunc) {
 		users.GET("/:id", ctrl.User.GetByID)
 		users.POST("", adminOnly, ctrl.User.Create)
 		users.PUT("/:id", adminOnly, ctrl.User.Update)
+		users.PATCH("/:id/deactivate", adminOnly, ctrl.User.Deactivate) // HU011
 		users.DELETE("/:id", adminOnly, ctrl.User.Delete)
 	}
 
