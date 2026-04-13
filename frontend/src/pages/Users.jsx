@@ -26,6 +26,7 @@ export default function Users() {
 
   const [users,    setUsers]    = useState([])
   const [search,   setSearch]   = useState('')
+  const [sortBy,   setSortBy]   = useState('')
   const [loading,  setLoading]  = useState(true)
   const [error,    setError]    = useState('')
   const [modalOpen, setModalOpen] = useState(false)
@@ -41,7 +42,8 @@ export default function Users() {
     if (!isAdmin) return
     setLoading(true)
     try {
-      const res = await fetch('/api/v1/users', {
+      const url = sortBy ? `/api/v1/users?sort_by=${sortBy}` : '/api/v1/users'
+      const res = await fetch(url, {
         headers: { Authorization: `Bearer ${currentUser?.token ?? ''}` },
       })
       if (!res.ok) throw new Error('Failed to load users')
@@ -52,7 +54,7 @@ export default function Users() {
     } finally {
       setLoading(false)
     }
-  }, [isAdmin, currentUser?.token])
+  }, [isAdmin, currentUser?.token, sortBy])
 
   useEffect(() => {
     fetchUsers()
@@ -150,8 +152,8 @@ export default function Users() {
         </button>
       </div>
 
-      {/* Search bar */}
-      <div className="mb-4">
+      {/* Search bar + Sort selector */}
+      <div className="mb-4 flex flex-col sm:flex-row gap-3">
         <input
           type="text"
           placeholder="Search by name or username..."
@@ -166,6 +168,21 @@ export default function Users() {
           onFocus={(e)  => (e.target.style.borderColor = 'var(--color-brand-primary)')}
           onBlur={(e)   => (e.target.style.borderColor = 'var(--color-border)')}
         />
+
+        <select
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value)}
+          className="px-3 py-2 rounded-md text-sm outline-none transition-colors duration-150"
+          style={{
+            backgroundColor: 'var(--color-bg-elevated)',
+            border:          '1px solid var(--color-border)',
+            color:           'var(--color-text-primary)',
+          }}
+        >
+          <option value="">Sort: Default</option>
+          <option value="username">Sort by Username (QuickSort)</option>
+          <option value="nombre">Sort by Full Name (MergeSort)</option>
+        </select>
       </div>
 
       {/* Error state */}
