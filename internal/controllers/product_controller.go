@@ -112,6 +112,30 @@ func (pc *ProductController) Update(c *gin.Context) {
 	})
 }
 
+// UpdatePrice actualiza únicamente el precio de un producto (HU014).
+func (pc *ProductController) UpdatePrice(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+
+	var req struct {
+		Price float64 `json:"price" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := pc.service.UpdatePrice(uint(id), req.Price); err != nil {
+		pc.mapError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Price updated successfully"})
+}
+
 // Delete elimina un producto por su ID.
 func (pc *ProductController) Delete(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -131,7 +155,8 @@ func (pc *ProductController) mapError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, services.ErrProductNameRequired),
 		errors.Is(err, services.ErrProductNameTaken),
-		errors.Is(err, services.ErrCategoryNotFound):
+		errors.Is(err, services.ErrCategoryNotFound),
+		errors.Is(err, services.ErrInvalidPrice):
 		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 	default:
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
