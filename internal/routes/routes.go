@@ -96,6 +96,7 @@ func Register(r *gin.Engine, ctrl Controllers, authMiddleware gin.HandlerFunc) {
 		products.GET("/:id", ctrl.Product.GetByID)
 		products.POST("", adminOnly, ctrl.Product.Create)
 		products.PUT("/:id", adminOnly, ctrl.Product.Update)
+		products.PATCH("/:id/price", adminOnly, ctrl.Product.UpdatePrice) // HU014
 		products.DELETE("/:id", adminOnly, ctrl.Product.Delete)
 	}
 

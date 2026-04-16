@@ -8,6 +8,7 @@ import Users            from './pages/Users'
 import Profile          from './pages/Profile'
 import Categories       from './pages/Categories'
 import Products         from './pages/Products'
+import Pricing          from './pages/Pricing'
 
 /**
  * App — router root.
@@ -41,6 +42,7 @@ export default function App() {
             <Route path="users"      element={<Users />} />
             <Route path="categories" element={<Categories />} />
             <Route path="products"  element={<Products />} />
+            <Route path="pricing"   element={<Pricing />} />
             <Route path="profile"   element={<Profile />} />
             {/* Future module routes:
               <Route path="inventory" element={<Inventory />} />
