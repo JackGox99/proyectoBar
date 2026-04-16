@@ -67,7 +67,7 @@ func (s *Server) setupRoutes() {
 	venueSvc     := services.NewVenueService(venueRepo)
 	userSvc      := services.NewUserService(userRepo, venueSvc)
 	categorySvc  := services.NewCategoryService(categoryRepo)
-	productSvc   := services.NewProductService(productRepo, categoryRepo)
+	productSvc   := services.NewProductService(productRepo, categoryRepo, venueRepo, inventoryRepo)
 	inventorySvc := services.NewInventoryService(inventoryRepo)
 	orderSvc     := services.NewOrderService(orderRepo, paymentRepo)
 	reportSvc    := services.NewReportService(orderRepo, inventoryRepo, paymentRepo)

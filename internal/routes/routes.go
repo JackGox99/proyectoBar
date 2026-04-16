@@ -89,14 +89,14 @@ func Register(r *gin.Engine, ctrl Controllers, authMiddleware gin.HandlerFunc) {
 		categories.DELETE("/:id", adminOnly, ctrl.Category.Delete)
 	}
 
-	// Products
+	// Products — HU013: solo admin puede crear, editar y eliminar.
 	products := protected.Group("/products")
 	{
 		products.GET("", ctrl.Product.List)
 		products.GET("/:id", ctrl.Product.GetByID)
-		products.POST("", ctrl.Product.Create)
-		products.PUT("/:id", ctrl.Product.Update)
-		products.DELETE("/:id", ctrl.Product.Delete)
+		products.POST("", adminOnly, ctrl.Product.Create)
+		products.PUT("/:id", adminOnly, ctrl.Product.Update)
+		products.DELETE("/:id", adminOnly, ctrl.Product.Delete)
 	}
 
 	// Inventory
