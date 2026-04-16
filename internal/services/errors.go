@@ -41,4 +41,13 @@ var (
 
 	// ErrCategoryNameTaken indica que ya existe una categoría con ese nombre (HU012).
 	ErrCategoryNameTaken = errors.New("category name already exists")
+
+	// ErrProductNameRequired indica que no se proporcionó nombre de producto (HU013).
+	ErrProductNameRequired = errors.New("product name is required")
+
+	// ErrProductNameTaken indica que ya existe un producto con ese nombre (HU013).
+	ErrProductNameTaken = errors.New("product name already exists")
+
+	// ErrCategoryNotFound indica que la categoría referenciada no existe (HU013).
+	ErrCategoryNotFound = errors.New("category not found")
 )

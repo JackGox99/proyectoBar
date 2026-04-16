@@ -10,6 +10,7 @@ import (
 type ProductRepository interface {
 	FindAll() ([]models.Product, error)
 	FindByID(id uint) (*models.Product, error)
+	FindByName(name string) (*models.Product, error)
 	FindByCategoryID(categoryID uint) ([]models.Product, error)
 	Create(p *models.Product) error
 	Update(p *models.Product) error
@@ -22,6 +23,11 @@ type productRepository struct {
 
 func NewProductRepository(db *gorm.DB) ProductRepository {
 	return &productRepository{db: db}
+}
+
+func (r *productRepository) FindByName(name string) (*models.Product, error) {
+	var product models.Product
+	return &product, r.db.Where("nombre = ?", name).First(&product).Error
 }
 
 func (r *productRepository) FindAll() ([]models.Product, error) {
