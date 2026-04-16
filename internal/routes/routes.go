@@ -79,14 +79,14 @@ func Register(r *gin.Engine, ctrl Controllers, authMiddleware gin.HandlerFunc) {
 		venues.GET("", ctrl.Venue.List)
 	}
 
-	// Categories
+	// Categories — HU012: solo admin puede crear, editar y eliminar.
 	categories := protected.Group("/categories")
 	{
 		categories.GET("", ctrl.Category.List)
 		categories.GET("/:id", ctrl.Category.GetByID)
-		categories.POST("", ctrl.Category.Create)
-		categories.PUT("/:id", ctrl.Category.Update)
-		categories.DELETE("/:id", ctrl.Category.Delete)
+		categories.POST("", adminOnly, ctrl.Category.Create)
+		categories.PUT("/:id", adminOnly, ctrl.Category.Update)
+		categories.DELETE("/:id", adminOnly, ctrl.Category.Delete)
 	}
 
 	// Products
