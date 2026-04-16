@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { label: 'Inventory',  to: '/inventory',  icon: '📦' },
   { label: 'Orders',     to: '/orders',     icon: '🧾' },
   { label: 'Products',   to: '/products',   icon: '🍺' },
+  { label: 'Pricing',    to: '/pricing',    icon: '💲' },
   { label: 'Categories', to: '/categories', icon: '📂' },
   { label: 'Users',      to: '/users',      icon: '👤' },
   { label: 'Reports',    to: '/reports',    icon: '📊' },

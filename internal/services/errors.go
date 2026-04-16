@@ -50,4 +50,7 @@ var (
 
 	// ErrCategoryNotFound indica que la categoría referenciada no existe (HU013).
 	ErrCategoryNotFound = errors.New("category not found")
+
+	// ErrInvalidPrice indica que el precio no es un entero positivo (HU014).
+	ErrInvalidPrice = errors.New("price must be a positive integer")
 )

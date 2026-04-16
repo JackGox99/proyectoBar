@@ -17,6 +17,7 @@ type ProductService interface {
 	ListByCategory(categoryID uint) ([]models.Product, error)
 	Create(p *models.Product) error
 	Update(p *models.Product) error
+	UpdatePrice(id uint, price float64) error // HU014
 	Delete(id uint) error
 }
 
@@ -127,6 +128,22 @@ func (s *productService) Update(p *models.Product) error {
 	}
 
 	return s.repo.Update(p)
+}
+
+// UpdatePrice actualiza únicamente el precio de un producto (HU014).
+// Valida que el precio sea un entero positivo (moneda local sin decimales).
+func (s *productService) UpdatePrice(id uint, price float64) error {
+	if price <= 0 || price != float64(int(price)) {
+		return ErrInvalidPrice
+	}
+
+	product, err := s.repo.FindByID(id)
+	if err != nil {
+		return err
+	}
+
+	product.Precio = price
+	return s.repo.Update(product)
 }
 
 func (s *productService) Delete(id uint) error {
