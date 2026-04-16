@@ -35,4 +35,10 @@ var (
 
 	// ErrUserInactive indica que el usuario está desactivado y no puede iniciar sesión (HU011).
 	ErrUserInactive = errors.New("user account is deactivated")
+
+	// ErrCategoryNameRequired indica que no se proporcionó nombre de categoría (HU012).
+	ErrCategoryNameRequired = errors.New("category name is required")
+
+	// ErrCategoryNameTaken indica que ya existe una categoría con ese nombre (HU012).
+	ErrCategoryNameTaken = errors.New("category name already exists")
 )
