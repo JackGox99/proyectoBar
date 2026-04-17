@@ -136,7 +136,8 @@ func (pc *ProductController) UpdatePrice(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Price updated successfully"})
 }
 
-// Delete elimina un producto por su ID.
+// Delete realiza la eliminación lógica de un producto (HU016).
+// El producto se marca como inactivo para preservar reportes históricos.
 func (pc *ProductController) Delete(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
@@ -147,7 +148,7 @@ func (pc *ProductController) Delete(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "Product deleted successfully"})
+	c.JSON(http.StatusOK, gin.H{"message": "Product removed from catalog"})
 }
 
 // mapError traduce errores tipados del servicio a códigos HTTP.

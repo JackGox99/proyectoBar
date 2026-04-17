@@ -25,9 +25,13 @@ func NewInventoryRepository(db *gorm.DB) InventoryRepository {
 	return &inventoryRepository{db: db}
 }
 
+// FindAll retorna inventario solo de productos activos (HU016).
 func (r *inventoryRepository) FindAll() ([]models.Inventory, error) {
 	var items []models.Inventory
-	return items, r.db.Preload("Sede").Preload("Producto").Find(&items).Error
+	return items, r.db.
+		Joins("JOIN productos ON productos.id = inventario.producto_id AND productos.activo = ?", true).
+		Preload("Sede").Preload("Producto").
+		Find(&items).Error
 }
 
 func (r *inventoryRepository) FindByID(id uint) (*models.Inventory, error) {
@@ -35,9 +39,14 @@ func (r *inventoryRepository) FindByID(id uint) (*models.Inventory, error) {
 	return &item, r.db.Preload("Sede").Preload("Producto").First(&item, id).Error
 }
 
+// FindByVenueID retorna inventario de la sede solo con productos activos (HU016).
 func (r *inventoryRepository) FindByVenueID(venueID uint) ([]models.Inventory, error) {
 	var items []models.Inventory
-	return items, r.db.Where("sede_id = ?", venueID).Preload("Producto").Find(&items).Error
+	return items, r.db.
+		Joins("JOIN productos ON productos.id = inventario.producto_id AND productos.activo = ?", true).
+		Where("inventario.sede_id = ?", venueID).
+		Preload("Producto").
+		Find(&items).Error
 }
 
 func (r *inventoryRepository) FindByVenueAndProduct(venueID, productID uint) (*models.Inventory, error) {
