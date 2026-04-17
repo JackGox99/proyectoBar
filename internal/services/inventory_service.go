@@ -8,6 +8,7 @@ import (
 // InventoryService define el contrato de lógica de negocio para inventario.
 type InventoryService interface {
 	List() ([]models.Inventory, error)
+	ListByVenue(venueID uint) ([]models.Inventory, error) // HU017
 	GetByID(id uint) (*models.Inventory, error)
 	Create(inv *models.Inventory) error
 	Update(inv *models.Inventory) error
@@ -26,6 +27,11 @@ func NewInventoryService(repo repository.InventoryRepository) InventoryService {
 
 func (s *inventoryService) List() ([]models.Inventory, error) {
 	return s.repo.FindAll()
+}
+
+// ListByVenue retorna el inventario filtrado por sede (HU017).
+func (s *inventoryService) ListByVenue(venueID uint) ([]models.Inventory, error) {
+	return s.repo.FindByVenueID(venueID)
 }
 
 func (s *inventoryService) GetByID(id uint) (*models.Inventory, error) {

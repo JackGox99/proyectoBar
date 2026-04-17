@@ -100,10 +100,11 @@ func Register(r *gin.Engine, ctrl Controllers, authMiddleware gin.HandlerFunc) {
 		products.DELETE("/:id", adminOnly, ctrl.Product.Delete)
 	}
 
-	// Inventory
+	// Inventory — HU017: admin ve inventario global, cajero ve solo su sede.
+	adminOrCashier := middleware.RequireRole(models.RolAdmin, models.RolCajero)
 	inventory := protected.Group("/inventory")
 	{
-		inventory.GET("", ctrl.Inventory.List)
+		inventory.GET("", adminOrCashier, ctrl.Inventory.List)
 		inventory.GET("/:id", ctrl.Inventory.GetByID)
 		inventory.POST("", ctrl.Inventory.Create)
 		inventory.PUT("/:id", ctrl.Inventory.Update)
