@@ -130,11 +130,9 @@ export default function Products() {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${currentUser?.token ?? ''}` },
       })
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || 'Failed to delete product')
-      }
-      setToast('Product deleted successfully')
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to delete product')
+      setToast(data.message || 'Product removed from catalog')
       setDeleteTarget(null)
       if (editingId === deleteTarget.id) resetForm()
       fetchProducts()
@@ -409,6 +407,8 @@ export default function Products() {
                         </button>
                         <button
                           onClick={() => setDeleteTarget(prod)}
+                          aria-label={`Delete ${prod.nombre}`}
+                          title="Delete product"
                           className="px-3 py-1 rounded-md text-xs font-medium transition-colors duration-150"
                           style={{
                             backgroundColor: 'rgba(239,83,80,0.12)',
@@ -418,7 +418,7 @@ export default function Products() {
                           onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(239,83,80,0.25)')}
                           onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'rgba(239,83,80,0.12)')}
                         >
-                          Delete
+                          🗑️
                         </button>
                       </div>
                     </td>
@@ -465,9 +465,12 @@ export default function Products() {
             >
               Delete Product
             </h2>
+            <p className="text-sm mb-2" style={{ color: 'var(--color-text-primary)' }}>
+              Are you sure you want to remove{' '}
+              <strong>{deleteTarget.nombre}</strong> from the catalog?
+            </p>
             <p className="text-sm mb-6" style={{ color: 'var(--color-text-muted)' }}>
-              Are you sure you want to delete <strong style={{ color: 'var(--color-text-primary)' }}>{deleteTarget.nombre}</strong>?
-              This action cannot be undone.
+              Warning: This action will hide the product from all locations and menus.
             </p>
             <div className="flex justify-end gap-3">
               <button
@@ -480,7 +483,7 @@ export default function Products() {
                   border: '1px solid var(--color-border)',
                 }}
               >
-                Cancel
+                No, Cancel
               </button>
               <button
                 onClick={handleDelete}
@@ -492,7 +495,7 @@ export default function Products() {
                   cursor: deleting ? 'not-allowed' : 'pointer',
                 }}
               >
-                {deleting ? 'Deleting...' : 'Confirm Delete'}
+                {deleting ? 'Deleting...' : 'Yes, Delete'}
               </button>
             </div>
           </div>
