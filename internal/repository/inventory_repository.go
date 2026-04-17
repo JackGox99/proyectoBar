@@ -30,13 +30,13 @@ func (r *inventoryRepository) FindAll() ([]models.Inventory, error) {
 	var items []models.Inventory
 	return items, r.db.
 		Joins("JOIN productos ON productos.id = inventario.producto_id AND productos.activo = ?", true).
-		Preload("Sede").Preload("Producto").
+		Preload("Sede").Preload("Producto").Preload("Producto.Categoria").
 		Find(&items).Error
 }
 
 func (r *inventoryRepository) FindByID(id uint) (*models.Inventory, error) {
 	var item models.Inventory
-	return &item, r.db.Preload("Sede").Preload("Producto").First(&item, id).Error
+	return &item, r.db.Preload("Sede").Preload("Producto").Preload("Producto.Categoria").First(&item, id).Error
 }
 
 // FindByVenueID retorna inventario de la sede solo con productos activos (HU016).
@@ -45,7 +45,7 @@ func (r *inventoryRepository) FindByVenueID(venueID uint) ([]models.Inventory, e
 	return items, r.db.
 		Joins("JOIN productos ON productos.id = inventario.producto_id AND productos.activo = ?", true).
 		Where("inventario.sede_id = ?", venueID).
-		Preload("Producto").
+		Preload("Producto").Preload("Producto.Categoria").
 		Find(&items).Error
 }
 
