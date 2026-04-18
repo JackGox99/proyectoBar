@@ -455,15 +455,16 @@ export default function Inventory() {
                   value={entryProduct}
                   onChange={(e) => setEntryProduct(e.target.value)}
                   required
-                  size={productOptions.length > 0 ? Math.min(productOptions.length + 1, 5) : 2}
                   className="w-full px-3 py-2 rounded-md text-sm outline-none"
                   style={{
                     backgroundColor: 'var(--color-bg-elevated)',
                     border: '1px solid var(--color-border)',
-                    color: 'var(--color-text-primary)',
+                    color: entryProduct ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
                   }}
                 >
-                  <option value="">-- Select a product --</option>
+                  <option value="">
+                    {productOptions.length === 0 ? 'No products match' : '-- Select a product --'}
+                  </option>
                   {productOptions.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.nombre}

@@ -66,16 +66,19 @@ CREATE TABLE categorias (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================
--- PRODUCTOS (maestro global, precio centralizado)
+-- PRODUCTOS (maestro global, precios centralizados)
+-- costo_compra: precio al que se adquiere del proveedor.
+-- precio: precio de venta al cliente (debe ser > costo_compra).
 -- ============================================================
 CREATE TABLE productos (
-  id           INT UNSIGNED    NOT NULL AUTO_INCREMENT,
-  categoria_id INT UNSIGNED    NOT NULL,
-  nombre       VARCHAR(150)    NOT NULL,
-  descripcion  TEXT            NULL,
-  precio       DECIMAL(10, 2)  NOT NULL,
-  activo       TINYINT(1)      NOT NULL DEFAULT 1,
-  created_at   TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  id            INT UNSIGNED    NOT NULL AUTO_INCREMENT,
+  categoria_id  INT UNSIGNED    NOT NULL,
+  nombre        VARCHAR(150)    NOT NULL,
+  descripcion   TEXT            NULL,
+  costo_compra  DECIMAL(10, 2)  NOT NULL DEFAULT 0,
+  precio        DECIMAL(10, 2)  NOT NULL,
+  activo        TINYINT(1)      NOT NULL DEFAULT 1,
+  created_at    TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   CONSTRAINT fk_producto_categoria
     FOREIGN KEY (categoria_id) REFERENCES categorias (id)
