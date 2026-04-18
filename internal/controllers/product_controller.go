@@ -21,10 +21,17 @@ func NewProductController(service services.ProductService) *ProductController {
 }
 
 // productRequest es el DTO de entrada para crear/actualizar un producto.
+// PurchaseCost y SalePrice se reciben como enteros (moneda local sin decimales);
+// el servicio valida que PurchaseCost > 0 y PurchaseCost < SalePrice.
+// VenueIDs solo aplica al Create: indica en qué sedes se habilita el inventario
+// con stock 0. En Update se ignora (la asignación de sedes no se modifica aquí).
 type productRequest struct {
-	Name        string `json:"name"        binding:"required,min=1,max=150"`
-	CategoryID  uint   `json:"category_id" binding:"required"`
-	Description string `json:"description"`
+	Name         string  `json:"name"          binding:"required,min=1,max=150"`
+	CategoryID   uint    `json:"category_id"   binding:"required"`
+	Description  string  `json:"description"`
+	PurchaseCost float64 `json:"purchase_cost" binding:"required"`
+	SalePrice    float64 `json:"sale_price"    binding:"required"`
+	VenueIDs     []uint  `json:"venue_ids"`
 }
 
 // List retorna todos los productos con su categoría.
@@ -64,9 +71,11 @@ func (pc *ProductController) Create(c *gin.Context) {
 		Nombre:      req.Name,
 		CategoriaID: req.CategoryID,
 		Descripcion: req.Description,
+		CostoCompra: req.PurchaseCost,
+		Precio:      req.SalePrice,
 	}
 
-	if err := pc.service.Create(product); err != nil {
+	if err := pc.service.Create(product, req.VenueIDs); err != nil {
 		pc.mapError(c, err)
 		return
 	}
@@ -100,6 +109,8 @@ func (pc *ProductController) Update(c *gin.Context) {
 	product.Nombre = req.Name
 	product.CategoriaID = req.CategoryID
 	product.Descripcion = req.Description
+	product.CostoCompra = req.PurchaseCost
+	product.Precio = req.SalePrice
 
 	if err := pc.service.Update(product); err != nil {
 		pc.mapError(c, err)
@@ -157,7 +168,11 @@ func (pc *ProductController) mapError(c *gin.Context, err error) {
 	case errors.Is(err, services.ErrProductNameRequired),
 		errors.Is(err, services.ErrProductNameTaken),
 		errors.Is(err, services.ErrCategoryNotFound),
-		errors.Is(err, services.ErrInvalidPrice):
+		errors.Is(err, services.ErrInvalidPrice),
+		errors.Is(err, services.ErrInvalidPurchaseCost),
+		errors.Is(err, services.ErrPurchaseExceedsSale),
+		errors.Is(err, services.ErrVenuesRequired),
+		errors.Is(err, services.ErrSedeNotFound):
 		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 	default:
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

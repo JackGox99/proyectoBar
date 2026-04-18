@@ -53,4 +53,13 @@ var (
 
 	// ErrInvalidPrice indica que el precio no es un entero positivo (HU014).
 	ErrInvalidPrice = errors.New("price must be a positive integer")
+
+	// ErrInvalidPurchaseCost indica que el costo de compra no es un entero positivo.
+	ErrInvalidPurchaseCost = errors.New("purchase cost must be a positive integer")
+
+	// ErrPurchaseExceedsSale indica que el costo de compra es mayor o igual al precio de venta.
+	ErrPurchaseExceedsSale = errors.New("purchase cost must be less than sale price")
+
+	// ErrVenuesRequired indica que no se seleccionó ninguna sede al registrar el producto.
+	ErrVenuesRequired = errors.New("at least one venue must be selected for the product")
 )

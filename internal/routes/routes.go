@@ -101,12 +101,14 @@ func Register(r *gin.Engine, ctrl Controllers, authMiddleware gin.HandlerFunc) {
 	}
 
 	// Inventory — HU017: admin ve inventario global, cajero ve solo su sede.
+	// HU018: entrada manual de stock restringida a admin y cajero.
 	adminOrCashier := middleware.RequireRole(models.RolAdmin, models.RolCajero)
 	inventory := protected.Group("/inventory")
 	{
 		inventory.GET("", adminOrCashier, ctrl.Inventory.List)
 		inventory.GET("/:id", ctrl.Inventory.GetByID)
 		inventory.POST("", ctrl.Inventory.Create)
+		inventory.POST("/add", adminOrCashier, ctrl.Inventory.AddStock) // HU018
 		inventory.PUT("/:id", ctrl.Inventory.Update)
 		inventory.POST("/:id/movements", ctrl.Inventory.AddMovement)
 	}
