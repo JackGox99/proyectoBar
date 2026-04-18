@@ -1,10 +1,15 @@
 package repository
 
 import (
+	"errors"
+
 	"gorm.io/gorm"
 
 	"bar-inventory-api/internal/models"
 )
+
+// ErrProductNotFound se retorna cuando el producto no existe o fue desactivado.
+var ErrProductNotFound = errors.New("product not found")
 
 // InventoryRepository define el contrato de acceso a datos para inventario.
 type InventoryRepository interface {
@@ -15,6 +20,10 @@ type InventoryRepository interface {
 	Create(inv *models.Inventory) error
 	Update(inv *models.Inventory) error
 	AddMovement(mov *models.InventoryMovement) error
+	// AddStock suma cantidad al stock_actual del (sede, producto) y registra el movimiento
+	// de tipo "entrada" en una única transacción. Si la fila de inventario no existe,
+	// se crea con stock_actual=cantidad. Valida que el producto esté activo.
+	AddStock(venueID, productID uint, quantity int, userID uint) (*models.Inventory, error)
 }
 
 type inventoryRepository struct {
@@ -64,4 +73,67 @@ func (r *inventoryRepository) Update(inv *models.Inventory) error {
 
 func (r *inventoryRepository) AddMovement(mov *models.InventoryMovement) error {
 	return r.db.Create(mov).Error
+}
+
+// AddStock registra una entrada manual (HU018).
+// - Valida que el producto exista y esté activo.
+// - Suma cantidad al stock_actual; crea la fila de inventario si no existe.
+// - Registra el movimiento de tipo "entrada" para trazabilidad.
+// Toda la operación se ejecuta en una única transacción.
+func (r *inventoryRepository) AddStock(venueID, productID uint, quantity int, userID uint) (*models.Inventory, error) {
+	var inv models.Inventory
+
+	err := r.db.Transaction(func(tx *gorm.DB) error {
+		// 1) Validar que el producto exista y esté activo.
+		var prod models.Product
+		if err := tx.Select("id", "activo").First(&prod, productID).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrProductNotFound
+			}
+			return err
+		}
+		if !prod.Activo {
+			return ErrProductNotFound
+		}
+
+		// 2) Buscar o crear la fila de inventario (sede, producto).
+		res := tx.Where("sede_id = ? AND producto_id = ?", venueID, productID).First(&inv)
+		if res.Error != nil {
+			if !errors.Is(res.Error, gorm.ErrRecordNotFound) {
+				return res.Error
+			}
+			inv = models.Inventory{
+				SedeID:      venueID,
+				ProductoID:  productID,
+				StockActual: quantity,
+			}
+			if err := tx.Create(&inv).Error; err != nil {
+				return err
+			}
+		} else {
+			inv.StockActual += quantity
+			if err := tx.Save(&inv).Error; err != nil {
+				return err
+			}
+		}
+
+		// 3) Registrar el movimiento de entrada.
+		mov := models.InventoryMovement{
+			InventarioID: inv.ID,
+			UsuarioID:    userID,
+			Tipo:         models.TipoEntrada,
+			Cantidad:     quantity,
+			Motivo:       "Manual stock entry",
+		}
+		return tx.Create(&mov).Error
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Recargar con relaciones para respuesta del endpoint.
+	if err := r.db.Preload("Producto").Preload("Producto.Categoria").Preload("Sede").First(&inv, inv.ID).Error; err != nil {
+		return nil, err
+	}
+	return &inv, nil
 }

@@ -1,6 +1,8 @@
 package controllers
 
 import (
+	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -86,4 +88,86 @@ func (ic *InventoryController) Update(c *gin.Context) {
 func (ic *InventoryController) AddMovement(c *gin.Context) {
 	// TODO (HU-Inventario): registrar movimiento y actualizar stock en transacción.
 	c.JSON(http.StatusNotImplemented, gin.H{"message": "not implemented"})
+}
+
+// addStockRequest es el DTO de entrada para POST /inventory/add (HU018).
+// Quantity se declara como json.Number para rechazar decimales (ej: 1.5) antes de convertir a int.
+type addStockRequest struct {
+	ProductID uint        `json:"product_id" binding:"required"`
+	Quantity  json.Number `json:"quantity"   binding:"required"`
+	VenueID   uint        `json:"venue_id"` // opcional: solo admin; cajero usa JWT.SedeID
+}
+
+// AddStock registra una entrada manual de stock (HU018).
+// - Cajero: la sede se toma de JWT.SedeID; se ignora cualquier venue_id del body.
+// - Admin: debe enviar venue_id en el body.
+// - Solo admite cantidades enteras positivas.
+func (ic *InventoryController) AddStock(c *gin.Context) {
+	raw, exists := c.Get(middleware.CtxClaims)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+		return
+	}
+	claims, ok := raw.(*services.TokenClaims)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid authentication context"})
+		return
+	}
+
+	var req addStockRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Regla de negocio: solo enteros. json.Number.Int64() falla si viene "1.5".
+	qty64, err := req.Quantity.Int64()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "quantity must be a whole number (no decimals)"})
+		return
+	}
+	if qty64 <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "quantity must be greater than zero"})
+		return
+	}
+
+	// Resolver la sede según el rol.
+	var venueID uint
+	switch claims.Rol {
+	case models.RolCajero:
+		if claims.SedeID == nil {
+			c.JSON(http.StatusForbidden, gin.H{"error": "cashier has no assigned location"})
+			return
+		}
+		venueID = *claims.SedeID // se ignora req.VenueID para preservar independencia operativa
+	case models.RolAdmin:
+		if req.VenueID == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "venue_id is required for admin"})
+			return
+		}
+		venueID = req.VenueID
+	default:
+		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden: insufficient privileges"})
+		return
+	}
+
+	inv, err := ic.service.AddStock(venueID, req.ProductID, int(qty64), claims.UserID)
+	if err != nil {
+		switch {
+		case errors.Is(err, services.ErrInvalidQuantity):
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		case errors.Is(err, services.ErrProductNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		case errors.Is(err, services.ErrVenueRequired):
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":   "Stock updated successfully",
+		"inventory": inv,
+	})
 }
