@@ -10,16 +10,20 @@ export default function Products() {
 
   const [products, setProducts]     = useState([])
   const [categories, setCategories] = useState([])
+  const [venues, setVenues]         = useState([])
   const [loading, setLoading]       = useState(true)
   const [error, setError]           = useState('')
   const [toast, setToast]           = useState('')
 
   // Form state
-  const [name, setName]               = useState('')
-  const [categoryId, setCategoryId]   = useState('')
-  const [description, setDescription] = useState('')
-  const [editingId, setEditingId]     = useState(null)
-  const [saving, setSaving]           = useState(false)
+  const [name, setName]                 = useState('')
+  const [categoryId, setCategoryId]     = useState('')
+  const [description, setDescription]   = useState('')
+  const [purchaseCost, setPurchaseCost] = useState('')
+  const [salePrice, setSalePrice]       = useState('')
+  const [venueIds, setVenueIds]         = useState([]) // sedes seleccionadas al crear
+  const [editingId, setEditingId]       = useState(null)
+  const [saving, setSaving]             = useState(false)
 
   // Delete confirmation
   const [deleteTarget, setDeleteTarget] = useState(null)
@@ -58,10 +62,25 @@ export default function Products() {
     }
   }, [isAdmin, currentUser?.token])
 
+  const fetchVenues = useCallback(async () => {
+    if (!isAdmin) return
+    try {
+      const res = await fetch('/api/v1/venues', {
+        headers: { Authorization: `Bearer ${currentUser?.token ?? ''}` },
+      })
+      if (!res.ok) throw new Error('Failed to load venues')
+      const data = await res.json()
+      setVenues(data)
+    } catch (err) {
+      setError(err.message)
+    }
+  }, [isAdmin, currentUser?.token])
+
   useEffect(() => {
     fetchProducts()
     fetchCategories()
-  }, [fetchProducts, fetchCategories])
+    fetchVenues()
+  }, [fetchProducts, fetchCategories, fetchVenues])
 
   // Auto-dismiss toast
   useEffect(() => {
@@ -74,7 +93,16 @@ export default function Products() {
     setName('')
     setCategoryId('')
     setDescription('')
+    setPurchaseCost('')
+    setSalePrice('')
+    setVenueIds([])
     setEditingId(null)
+  }
+
+  function toggleVenue(id) {
+    setVenueIds((prev) =>
+      prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id],
+    )
   }
 
   function startEdit(prod) {
@@ -82,20 +110,53 @@ export default function Products() {
     setName(prod.nombre)
     setCategoryId(String(prod.categoria_id))
     setDescription(prod.descripcion || '')
+    setPurchaseCost(prod.costo_compra != null ? String(Math.trunc(Number(prod.costo_compra))) : '')
+    setSalePrice(prod.precio != null ? String(Math.trunc(Number(prod.precio))) : '')
     setError('')
   }
+
+  const currencyFmt = new Intl.NumberFormat('es-CO', {
+    style: 'currency',
+    currency: 'COP',
+    maximumFractionDigits: 0,
+  })
 
   async function handleSubmit(e) {
     e.preventDefault()
     if (!name.trim() || !categoryId) return
+
+    const intOnly = /^\d+$/
+    if (!intOnly.test(purchaseCost) || !intOnly.test(salePrice)) {
+      setError('Prices must be whole numbers (no decimals).')
+      return
+    }
+    const costNum = Number(purchaseCost)
+    const priceNum = Number(salePrice)
+    if (costNum <= 0 || priceNum <= 0) {
+      setError('Prices must be greater than zero.')
+      return
+    }
+    if (costNum >= priceNum) {
+      setError('Purchase cost must be less than sale price.')
+      return
+    }
+    if (!editingId && venueIds.length === 0) {
+      setError('Select at least one venue where this product will be available.')
+      return
+    }
+
     setSaving(true)
     setError('')
 
-    const body = JSON.stringify({
+    const payload = {
       name: name.trim(),
       category_id: Number(categoryId),
       description: description.trim(),
-    })
+      purchase_cost: costNum,
+      sale_price: priceNum,
+    }
+    if (!editingId) payload.venue_ids = venueIds
+    const body = JSON.stringify(payload)
     const headers = {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${currentUser?.token ?? ''}`,
@@ -246,7 +307,109 @@ export default function Products() {
             </div>
           </div>
 
-          {/* Row 2: Description */}
+          {/* Row 2: Purchase Cost + Sale Price */}
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="flex-1">
+              <label
+                className="block text-xs font-semibold mb-1 uppercase tracking-wider"
+                style={{ color: 'var(--color-text-muted)' }}
+              >
+                Purchase Cost (COP)
+              </label>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                placeholder="e.g. 3000"
+                value={purchaseCost}
+                onChange={(e) => setPurchaseCost(e.target.value)}
+                required
+                className="w-full px-3 py-2 rounded-md text-sm outline-none transition-colors duration-150"
+                style={{
+                  backgroundColor: 'var(--color-bg-elevated)',
+                  border: '1px solid var(--color-border)',
+                  color: 'var(--color-text-primary)',
+                }}
+                onFocus={(e) => (e.target.style.borderColor = 'var(--color-brand-primary)')}
+                onBlur={(e) => (e.target.style.borderColor = 'var(--color-border)')}
+              />
+            </div>
+            <div className="flex-1">
+              <label
+                className="block text-xs font-semibold mb-1 uppercase tracking-wider"
+                style={{ color: 'var(--color-text-muted)' }}
+              >
+                Sale Price (COP)
+              </label>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                placeholder="e.g. 5000"
+                value={salePrice}
+                onChange={(e) => setSalePrice(e.target.value)}
+                required
+                className="w-full px-3 py-2 rounded-md text-sm outline-none transition-colors duration-150"
+                style={{
+                  backgroundColor: 'var(--color-bg-elevated)',
+                  border: '1px solid var(--color-border)',
+                  color: 'var(--color-text-primary)',
+                }}
+                onFocus={(e) => (e.target.style.borderColor = 'var(--color-brand-primary)')}
+                onBlur={(e) => (e.target.style.borderColor = 'var(--color-border)')}
+              />
+            </div>
+          </div>
+
+          {/* Row 3: Venues (only when creating — Update keeps current assignments) */}
+          {!editingId && (
+            <div>
+              <label
+                className="block text-xs font-semibold mb-1 uppercase tracking-wider"
+                style={{ color: 'var(--color-text-muted)' }}
+              >
+                Available at Venues
+              </label>
+              <p className="text-xs mb-2" style={{ color: 'var(--color-text-muted)' }}>
+                Pick the venues where this product will be sold. An empty inventory
+                row (stock 0) is created for each selection.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {venues.map((v) => {
+                  const checked = venueIds.includes(v.id)
+                  return (
+                    <label
+                      key={v.id}
+                      className="flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer text-sm transition-colors duration-150"
+                      style={{
+                        backgroundColor: checked
+                          ? 'rgba(37,99,235,0.18)'
+                          : 'var(--color-bg-elevated)',
+                        border: checked
+                          ? '1px solid #2563eb'
+                          : '1px solid var(--color-border)',
+                        color: 'var(--color-text-primary)',
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleVenue(v.id)}
+                      />
+                      {v.nombre}
+                    </label>
+                  )
+                })}
+                {venues.length === 0 && (
+                  <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                    No venues available.
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Row 4: Description */}
           <div>
             <label
               className="block text-xs font-semibold mb-1 uppercase tracking-wider"
@@ -270,7 +433,7 @@ export default function Products() {
             />
           </div>
 
-          {/* Row 3: Buttons */}
+          {/* Row 5: Buttons */}
           <div className="flex justify-end gap-2">
             {editingId && (
               <button
@@ -288,7 +451,14 @@ export default function Products() {
             )}
             <button
               type="submit"
-              disabled={saving || !name.trim() || !categoryId}
+              disabled={
+                saving ||
+                !name.trim() ||
+                !categoryId ||
+                !purchaseCost ||
+                !salePrice ||
+                (!editingId && venueIds.length === 0)
+              }
               className="px-5 py-2 rounded-md font-semibold text-sm transition-colors duration-150"
               style={{
                 backgroundColor: saving ? 'var(--color-border)' : '#2563eb',
@@ -329,7 +499,7 @@ export default function Products() {
           <table className="w-full text-sm border-collapse min-w-[500px]">
             <thead>
               <tr style={{ backgroundColor: 'var(--color-bg-elevated)' }}>
-                {['ID', 'Product Name', 'Category', 'Description', 'Actions'].map((col) => (
+                {['ID', 'Product Name', 'Category', 'Purchase', 'Sale', 'Description', 'Actions'].map((col) => (
                   <th
                     key={col}
                     className="px-4 py-3 text-left font-semibold text-xs uppercase tracking-wider"
@@ -344,14 +514,14 @@ export default function Products() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-10 text-center"
+                  <td colSpan={7} className="px-4 py-10 text-center"
                     style={{ color: 'var(--color-text-muted)' }}>
                     Loading...
                   </td>
                 </tr>
               ) : products.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-10 text-center"
+                  <td colSpan={7} className="px-4 py-10 text-center"
                     style={{ color: 'var(--color-text-muted)' }}>
                     No products found. Add one above.
                   </td>
@@ -385,6 +555,14 @@ export default function Products() {
                       >
                         {prod.categoria?.nombre || '—'}
                       </span>
+                    </td>
+                    <td className="px-4 py-3 font-mono text-xs"
+                      style={{ color: 'var(--color-text-muted)' }}>
+                      {Number(prod.costo_compra) > 0 ? currencyFmt.format(Number(prod.costo_compra)) : '—'}
+                    </td>
+                    <td className="px-4 py-3 font-mono text-xs font-semibold"
+                      style={{ color: 'var(--color-text-primary)' }}>
+                      {Number(prod.precio) > 0 ? currencyFmt.format(Number(prod.precio)) : '—'}
                     </td>
                     <td className="px-4 py-3"
                       style={{ color: prod.descripcion ? 'var(--color-text-primary)' : 'var(--color-text-muted)' }}>

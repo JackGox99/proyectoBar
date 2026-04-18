@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useAuth } from '../context/AuthContext'
 
 /**
- * Inventory — Local Stock Inquiry (HU017).
+ * Inventory — Local Stock Inquiry (HU017) + Manual Stock Entry (HU018).
  * Cashier sees only their assigned venue; admin sees global inventory.
  */
 export default function Inventory() {
@@ -10,15 +10,26 @@ export default function Inventory() {
 
   const [items, setItems]       = useState([])
   const [venues, setVenues]     = useState([])
+  const [products, setProducts] = useState([])
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState('')
+  const [toast, setToast]       = useState('')
   const [search, setSearch]     = useState('')
   // Admin-only: '' = All Locations, otherwise a specific venue ID.
   const [adminVenueId, setAdminVenueId] = useState('')
 
+  // Manual Stock Entry modal (HU018)
+  const [modalOpen, setModalOpen]       = useState(false)
+  const [entryProduct, setEntryProduct] = useState('')
+  const [entryQty, setEntryQty]         = useState('')
+  const [entrySearch, setEntrySearch]   = useState('')
+  const [submitting, setSubmitting]     = useState(false)
+  const [entryError, setEntryError]     = useState('')
+
   const isAdmin  = currentUser?.rol === 'admin'
   const isCashier = currentUser?.rol === 'cajero'
   const canView = isAdmin || isCashier
+  const canAddStock = isAdmin || isCashier
 
   const fetchInventory = useCallback(async () => {
     if (!canView) return
@@ -57,14 +68,41 @@ export default function Inventory() {
     }
   }, [canView, currentUser?.token])
 
+  const fetchProducts = useCallback(async () => {
+    if (!canAddStock) return
+    try {
+      const res = await fetch('/api/v1/products', {
+        headers: { Authorization: `Bearer ${currentUser?.token ?? ''}` },
+      })
+      if (!res.ok) return
+      const data = await res.json()
+      setProducts(data || [])
+    } catch {
+      /* product list is only needed for the entry modal */
+    }
+  }, [canAddStock, currentUser?.token])
+
   useEffect(() => {
     fetchInventory()
     fetchVenues()
-  }, [fetchInventory, fetchVenues])
+    fetchProducts()
+  }, [fetchInventory, fetchVenues, fetchProducts])
 
   const venueLabel = useMemo(() => {
     if (isAdmin) {
       if (!adminVenueId) return 'All Locations'
+      const match = venues.find((v) => String(v.id) === String(adminVenueId))
+      return match?.nombre || ''
+    }
+    if (!currentUser?.sede_id) return ''
+    const match = venues.find((v) => v.id === currentUser.sede_id)
+    return match?.nombre || ''
+  }, [isAdmin, adminVenueId, currentUser?.sede_id, venues])
+
+  // Sede mostrada dentro del modal (HU018 — "Current Location: [Sede Name]").
+  const modalVenueLabel = useMemo(() => {
+    if (isAdmin) {
+      if (!adminVenueId) return ''
       const match = venues.find((v) => String(v.id) === String(adminVenueId))
       return match?.nombre || ''
     }
@@ -80,6 +118,87 @@ export default function Inventory() {
       (it.producto?.nombre || '').toLowerCase().includes(term)
     )
   }, [items, search])
+
+  const productOptions = useMemo(() => {
+    const term = entrySearch.trim().toLowerCase()
+    const list = (products || []).filter((p) => p.activo !== false)
+    if (!term) return list
+    return list.filter((p) => (p.nombre || '').toLowerCase().includes(term))
+  }, [products, entrySearch])
+
+  const openModal = () => {
+    setEntryProduct('')
+    setEntryQty('')
+    setEntrySearch('')
+    setEntryError('')
+    setModalOpen(true)
+  }
+
+  const closeModal = () => {
+    if (submitting) return
+    setModalOpen(false)
+  }
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setEntryError('')
+
+    if (!entryProduct) {
+      setEntryError('Please select a product.')
+      return
+    }
+    if (entryQty === '' || entryQty === null) {
+      setEntryError('Quantity is required.')
+      return
+    }
+    // Regla de negocio: solo enteros positivos (no decimales).
+    if (!/^\d+$/.test(String(entryQty).trim())) {
+      setEntryError('Quantity must be a whole number (no decimals).')
+      return
+    }
+    const qty = parseInt(entryQty, 10)
+    if (qty <= 0) {
+      setEntryError('Quantity must be greater than zero.')
+      return
+    }
+    if (isAdmin && !adminVenueId) {
+      setEntryError('Please select a location before adding stock.')
+      return
+    }
+
+    setSubmitting(true)
+    try {
+      const body = { product_id: Number(entryProduct), quantity: qty }
+      if (isAdmin) body.venue_id = Number(adminVenueId)
+
+      const res = await fetch('/api/v1/inventory/add', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${currentUser?.token ?? ''}`,
+        },
+        body: JSON.stringify(body),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to add stock')
+      }
+
+      setToast(data.message || 'Stock updated successfully')
+      setModalOpen(false)
+      fetchInventory()
+    } catch (err) {
+      setEntryError(err.message)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!toast) return
+    const t = setTimeout(() => setToast(''), 3000)
+    return () => clearTimeout(t)
+  }, [toast])
 
   if (!canView) {
     return (
@@ -98,14 +217,44 @@ export default function Inventory() {
   return (
     <div>
       {/* Page header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold" style={{ color: 'var(--color-text-primary)' }}>
-          Inventory Status{venueLabel ? ` - ${venueLabel}` : ''}
-        </h1>
-        <p className="mt-1 text-sm" style={{ color: 'var(--color-text-muted)' }}>
-          Current stock available at your assigned location.
-        </p>
+      <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold" style={{ color: 'var(--color-text-primary)' }}>
+            Inventory Status{venueLabel ? ` - ${venueLabel}` : ''}
+          </h1>
+          <p className="mt-1 text-sm" style={{ color: 'var(--color-text-muted)' }}>
+            Current stock available at your assigned location.
+          </p>
+        </div>
+
+        {canAddStock && (
+          <button
+            type="button"
+            onClick={openModal}
+            className="px-4 py-2 rounded-md text-sm font-semibold transition-opacity duration-150 hover:opacity-90"
+            style={{
+              backgroundColor: 'var(--color-success, #16a34a)',
+              color: '#ffffff',
+            }}
+          >
+            + Manual Stock Entry
+          </button>
+        )}
       </div>
+
+      {/* Toast */}
+      {toast && (
+        <div
+          className="mb-4 px-4 py-3 rounded-md text-sm"
+          style={{
+            backgroundColor: 'rgba(22,163,74,0.12)',
+            border: '1px solid #16a34a',
+            color: '#16a34a',
+          }}
+        >
+          {toast}
+        </div>
+      )}
 
       {/* Search bar + (admin) venue selector */}
       <div className="mb-4 flex flex-col sm:flex-row gap-3">
@@ -258,6 +407,142 @@ export default function Inventory() {
           </div>
         )}
       </div>
+
+      {/* Manual Stock Entry Modal (HU018) */}
+      {modalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-4"
+          style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}
+          onClick={closeModal}
+        >
+          <div
+            className="w-full max-w-md rounded-lg p-6"
+            style={{
+              backgroundColor: 'var(--color-bg-surface)',
+              border: '1px solid var(--color-border)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-xl font-bold mb-1" style={{ color: 'var(--color-text-primary)' }}>
+              Manual Stock Entry
+            </h2>
+            <p className="text-xs mb-5" style={{ color: 'var(--color-text-muted)' }}>
+              Current Location: <strong>{modalVenueLabel || '—'}</strong>
+            </p>
+
+            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+              {/* Product selector with search */}
+              <div>
+                <label
+                  className="block text-sm font-medium mb-1"
+                  style={{ color: 'var(--color-text-primary)' }}
+                >
+                  Select Product
+                </label>
+                <input
+                  type="text"
+                  placeholder="Search product (e.g. Old Parr 750ml)"
+                  value={entrySearch}
+                  onChange={(e) => setEntrySearch(e.target.value)}
+                  className="w-full px-3 py-2 rounded-md text-sm outline-none mb-2"
+                  style={{
+                    backgroundColor: 'var(--color-bg-elevated)',
+                    border: '1px solid var(--color-border)',
+                    color: 'var(--color-text-primary)',
+                  }}
+                />
+                <select
+                  value={entryProduct}
+                  onChange={(e) => setEntryProduct(e.target.value)}
+                  required
+                  className="w-full px-3 py-2 rounded-md text-sm outline-none"
+                  style={{
+                    backgroundColor: 'var(--color-bg-elevated)',
+                    border: '1px solid var(--color-border)',
+                    color: entryProduct ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
+                  }}
+                >
+                  <option value="">
+                    {productOptions.length === 0 ? 'No products match' : '-- Select a product --'}
+                  </option>
+                  {productOptions.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Quantity */}
+              <div>
+                <label
+                  className="block text-sm font-medium mb-1"
+                  style={{ color: 'var(--color-text-primary)' }}
+                >
+                  Quantity
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  required
+                  placeholder="Enter whole units (e.g. 12)"
+                  value={entryQty}
+                  onChange={(e) => setEntryQty(e.target.value)}
+                  className="w-full px-3 py-2 rounded-md text-sm outline-none"
+                  style={{
+                    backgroundColor: 'var(--color-bg-elevated)',
+                    border: '1px solid var(--color-border)',
+                    color: 'var(--color-text-primary)',
+                  }}
+                />
+              </div>
+
+              {/* Entry error */}
+              {entryError && (
+                <div
+                  className="px-3 py-2 rounded-md text-xs"
+                  style={{
+                    backgroundColor: 'rgba(239,83,80,0.12)',
+                    border: '1px solid var(--color-error)',
+                    color: 'var(--color-error)',
+                  }}
+                >
+                  {entryError}
+                </div>
+              )}
+
+              {/* Action buttons */}
+              <div className="flex justify-end gap-2 mt-2">
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  disabled={submitting}
+                  className="px-4 py-2 rounded-md text-sm font-medium transition-opacity duration-150 hover:opacity-90 disabled:opacity-60"
+                  style={{
+                    backgroundColor: 'var(--color-bg-elevated)',
+                    color: 'var(--color-text-primary)',
+                    border: '1px solid var(--color-border)',
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="px-4 py-2 rounded-md text-sm font-semibold transition-opacity duration-150 hover:opacity-90 disabled:opacity-60"
+                  style={{
+                    backgroundColor: 'var(--color-success, #16a34a)',
+                    color: '#ffffff',
+                  }}
+                >
+                  {submitting ? 'Adding...' : 'Add to Stock'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
