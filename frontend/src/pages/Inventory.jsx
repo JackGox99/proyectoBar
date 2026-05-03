@@ -25,6 +25,8 @@ export default function Inventory() {
   const [entrySearch, setEntrySearch]   = useState('')
   const [submitting, setSubmitting]     = useState(false)
   const [entryError, setEntryError]     = useState('')
+  // HU019 — error específico del campo Quantity (controla el borde rojo).
+  const [qtyError, setQtyError]         = useState('')
 
   const isAdmin  = currentUser?.rol === 'admin'
   const isCashier = currentUser?.rol === 'cajero'
@@ -131,6 +133,7 @@ export default function Inventory() {
     setEntryQty('')
     setEntrySearch('')
     setEntryError('')
+    setQtyError('')
     setModalOpen(true)
   }
 
@@ -142,23 +145,24 @@ export default function Inventory() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     setEntryError('')
+    setQtyError('')
 
     if (!entryProduct) {
       setEntryError('Please select a product.')
       return
     }
     if (entryQty === '' || entryQty === null) {
-      setEntryError('Quantity is required.')
+      setQtyError('Quantity is required.')
       return
     }
-    // Regla de negocio: solo enteros positivos (no decimales).
+    // HU019 — solo enteros positivos. Mensaje alineado al mockup.
     if (!/^\d+$/.test(String(entryQty).trim())) {
-      setEntryError('Quantity must be a whole number (no decimals).')
+      setQtyError('Invalid input. Please enter a whole number (e.g., 10).')
       return
     }
     const qty = parseInt(entryQty, 10)
     if (qty <= 0) {
-      setEntryError('Quantity must be greater than zero.')
+      setQtyError('Quantity must be greater than zero.')
       return
     }
     if (isAdmin && !adminVenueId) {
@@ -473,13 +477,13 @@ export default function Inventory() {
                 </select>
               </div>
 
-              {/* Quantity */}
+              {/* Quantity (HU019 — Integer Unit Validation) */}
               <div>
                 <label
                   className="block text-sm font-medium mb-1"
                   style={{ color: 'var(--color-text-primary)' }}
                 >
-                  Quantity
+                  Quantity to Add
                 </label>
                 <input
                   type="number"
@@ -488,14 +492,37 @@ export default function Inventory() {
                   required
                   placeholder="Enter whole units (e.g. 12)"
                   value={entryQty}
-                  onChange={(e) => setEntryQty(e.target.value)}
+                  onKeyDown={(e) => {
+                    // Bloquea caracteres que producirían un Float y muestra el aviso inmediato.
+                    if (['.', ',', 'e', 'E', '+', '-'].includes(e.key)) {
+                      e.preventDefault()
+                      setQtyError('Only whole units are allowed')
+                    }
+                  }}
+                  onPaste={(e) => {
+                    // Si pegan algo con decimal/coma, lo bloqueamos también.
+                    const text = e.clipboardData.getData('text')
+                    if (/[.,eE+\-]/.test(text)) {
+                      e.preventDefault()
+                      setQtyError('Only whole units are allowed')
+                    }
+                  }}
+                  onChange={(e) => {
+                    setEntryQty(e.target.value)
+                    if (qtyError) setQtyError('')
+                  }}
                   className="w-full px-3 py-2 rounded-md text-sm outline-none"
                   style={{
                     backgroundColor: 'var(--color-bg-elevated)',
-                    border: '1px solid var(--color-border)',
+                    border: `1px solid ${qtyError ? 'var(--color-error)' : 'var(--color-border)'}`,
                     color: 'var(--color-text-primary)',
                   }}
                 />
+                {qtyError && (
+                  <p className="mt-1 text-xs" style={{ color: 'var(--color-error)' }}>
+                    {qtyError}
+                  </p>
+                )}
               </div>
 
               {/* Entry error */}

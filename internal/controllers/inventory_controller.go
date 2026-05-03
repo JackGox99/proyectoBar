@@ -3,6 +3,7 @@ package controllers
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -120,14 +121,17 @@ func (ic *InventoryController) AddStock(c *gin.Context) {
 		return
 	}
 
-	// Regla de negocio: solo enteros. json.Number.Int64() falla si viene "1.5".
+	// HU019 — Integer Unit Validation: json.Number.Int64() falla si el texto
+	// contiene punto decimal o exponente (ej. "1.5", "1.0", "1e2").
+	// El log replica el formato del mockup HU019.
 	qty64, err := req.Quantity.Int64()
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "quantity must be a whole number (no decimals)"})
+		log.Printf("HU019: Validation failed. Expected Integer, received Float. (raw=%q)", req.Quantity.String())
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input. Please enter a whole number (e.g., 10)."})
 		return
 	}
 	if qty64 <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "quantity must be greater than zero"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Quantity must be greater than zero."})
 		return
 	}
 
