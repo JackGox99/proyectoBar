@@ -43,7 +43,7 @@ func (oc *OrderController) List(c *gin.Context) {
 			return
 		}
 		c.JSON(http.StatusOK, orders)
-	case models.RolAdmin:
+	case models.RolAdmin, models.RolCajero:
 		orders, err := oc.service.List()
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -246,9 +246,102 @@ func (oc *OrderController) RemoveItem(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "item removed"})
 }
 
+// Pay registra el pago de un pedido abierto y lo cierra (HU025).
+// Solo cajero y admin pueden procesar pagos.
+// Finalize procesa el pago atómico de un pedido (HU026).
+// Valida método, verifica stock y cierra la orden en una sola transacción.
+func (oc *OrderController) Finalize(c *gin.Context) {
+	claims, ok := extractClaims(c)
+	if !ok {
+		return
+	}
+	if claims.Rol != models.RolCajero && claims.Rol != models.RolAdmin {
+		c.JSON(http.StatusForbidden, gin.H{"error": "only cashiers and admins can finalize payments"})
+		return
+	}
+
+	orderID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid order id"})
+		return
+	}
+
+	var body struct {
+		MetodoPago models.MetodoPago `json:"metodo_pago" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "metodo_pago is required"})
+		return
+	}
+
+	payment := models.Payment{
+		UsuarioID:  claims.UserID,
+		MetodoPago: body.MetodoPago,
+	}
+
+	if err := oc.service.Finalize(uint(orderID), &payment); err != nil {
+		switch {
+		case errors.Is(err, services.ErrOrderNotOpen):
+			c.JSON(http.StatusConflict, gin.H{"error": "order is not open"})
+		case errors.Is(err, services.ErrInvalidPaymentMethod):
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		case errors.Is(err, services.ErrStockDiscrepancy):
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		case errors.Is(err, gorm.ErrRecordNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": "order not found"})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, payment)
+}
+
 func (oc *OrderController) Pay(c *gin.Context) {
-	// TODO (HU-Pedidos): cerrar pedido, registrar pago, descontar inventario.
-	c.JSON(http.StatusNotImplemented, gin.H{"message": "not implemented"})
+	claims, ok := extractClaims(c)
+	if !ok {
+		return
+	}
+	if claims.Rol != models.RolCajero && claims.Rol != models.RolAdmin {
+		c.JSON(http.StatusForbidden, gin.H{"error": "only cashiers and admins can process payments"})
+		return
+	}
+
+	orderID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid order id"})
+		return
+	}
+
+	var body struct {
+		MetodoPago models.MetodoPago `json:"metodo_pago" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "metodo_pago is required"})
+		return
+	}
+
+	payment := models.Payment{
+		UsuarioID:  claims.UserID,
+		MetodoPago: body.MetodoPago,
+	}
+
+	if err := oc.service.Pay(uint(orderID), &payment); err != nil {
+		switch {
+		case errors.Is(err, services.ErrOrderNotOpen):
+			c.JSON(http.StatusConflict, gin.H{"error": "order is not open"})
+		case errors.Is(err, services.ErrInvalidPaymentMethod):
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		case errors.Is(err, gorm.ErrRecordNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": "order not found"})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, payment)
 }
 
 // extractClaims extrae los JWT claims del contexto Gin y responde 401 si faltan.
