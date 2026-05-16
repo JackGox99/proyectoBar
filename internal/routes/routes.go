@@ -128,7 +128,8 @@ func Register(r *gin.Engine, ctrl Controllers, authMiddleware gin.HandlerFunc) {
 		orders.DELETE("/:id", adminOrWaiter, ctrl.Order.Cancel) // HU021
 		orders.POST("/:id/items", adminOrWaiter, ctrl.Order.AddItem)           // HU023
 		orders.DELETE("/:id/items/:itemId", adminOrWaiter, ctrl.Order.RemoveItem) // HU024
-		orders.POST("/:id/pay", ctrl.Order.Pay)
+		orders.POST("/:id/pay", adminOrCashier, ctrl.Order.Pay)          // HU025
+		orders.POST("/:id/finalize", adminOrCashier, ctrl.Order.Finalize) // HU026
 	}
 
 	// Reports

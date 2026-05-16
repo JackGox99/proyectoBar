@@ -11,9 +11,11 @@ import (
 )
 
 var (
-	ErrOrderNotOpen       = errors.New("order is not open")
-	ErrOrderNotOwner      = errors.New("not the order owner")
-	ErrInvalidItemQuantity = errors.New("quantity must be greater than zero")
+	ErrOrderNotOpen         = errors.New("order is not open")
+	ErrOrderNotOwner        = errors.New("not the order owner")
+	ErrInvalidItemQuantity  = errors.New("quantity must be greater than zero")
+	ErrInvalidPaymentMethod = errors.New("payment method must be cash, debit_card or credit_card")
+	ErrStockDiscrepancy     = errors.New("Stock discrepancy. Transaction cancelled.")
 )
 
 // ErrInsufficientStock se retorna cuando el stock disponible es menor al solicitado.
@@ -48,6 +50,10 @@ type OrderService interface {
 	RemoveItem(orderID, itemID uint) error
 	// Pay cierra el pedido y genera el registro de pago en una transacción.
 	Pay(orderID uint, payment *models.Payment) error
+	// Finalize ejecuta el cierre atómico del pedido (HU026): valida método de
+	// pago, verifica concurrencia de stock, crea el pago y cierra la orden en
+	// una sola transacción de BD.
+	Finalize(orderID uint, payment *models.Payment) error
 }
 
 type orderService struct {
@@ -182,7 +188,48 @@ func (s *orderService) RemoveItem(orderID, itemID uint) error {
 	return s.inventoryRepo.DecrementStock(inv.ID, -found.Cantidad)
 }
 
+func (s *orderService) Finalize(orderID uint, payment *models.Payment) error {
+	switch payment.MetodoPago {
+	case models.MetodoEfectivo, models.MetodoTarjetaDebito, models.MetodoTarjetaCredito:
+	default:
+		return ErrInvalidPaymentMethod
+	}
+	err := s.repo.FinalizeOrder(orderID, payment)
+	if errors.Is(err, repository.ErrOrderAlreadyClosed) {
+		return ErrOrderNotOpen
+	}
+	if errors.Is(err, repository.ErrStockDiscrepancy) {
+		return ErrStockDiscrepancy
+	}
+	return err
+}
+
 func (s *orderService) Pay(orderID uint, payment *models.Payment) error {
+	switch payment.MetodoPago {
+	case models.MetodoEfectivo, models.MetodoTarjetaDebito, models.MetodoTarjetaCredito:
+	default:
+		return ErrInvalidPaymentMethod
+	}
+
+	order, err := s.repo.FindByID(orderID)
+	if err != nil {
+		return err
+	}
+	if order.Estado != models.EstadoAbierto {
+		return ErrOrderNotOpen
+	}
+
+	var total float64
+	for _, item := range order.Items {
+		total += item.PrecioUnitario * float64(item.Cantidad)
+	}
+
 	payment.PedidoID = orderID
-	return s.paymentRepo.Create(payment)
+	payment.Total = total
+	if err := s.paymentRepo.Create(payment); err != nil {
+		return err
+	}
+
+	order.Estado = models.EstadoPagado
+	return s.repo.Update(order)
 }
