@@ -93,7 +93,6 @@ export default function Dashboard() {
     { name: 'Categories', desc: 'Organize products by category.',     icon: '📂', to: '/categories', ready: isAdmin },
     { name: 'Users',      desc: 'Staff accounts and roles.',          icon: '👤', to: '/users',      ready: isAdmin },
     { name: 'Reports',    desc: 'Sales and low-stock reports.',       icon: '📊', to: null,          ready: false },
-    { name: 'Settings',   desc: 'Configure venues and preferences.',  icon: '⚙️', to: null,          ready: false },
   ]
 
   return (

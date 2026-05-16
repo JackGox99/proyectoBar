@@ -13,9 +13,11 @@ function formatCurrency(amount) {
  */
 export default function Orders() {
   const { user: currentUser } = useAuth()
-  const isWaiter = currentUser?.rol === 'mesero'
-  const isAdmin  = currentUser?.rol === 'admin'
-  const canView  = isWaiter || isAdmin
+  const isWaiter  = currentUser?.rol === 'mesero'
+  const isAdmin   = currentUser?.rol === 'admin'
+  const isCashier = currentUser?.rol === 'cajero'
+  const canView   = isWaiter || isAdmin || isCashier
+  const canPay    = isAdmin || isCashier
 
   const [orders, setOrders]             = useState([])
   const [venues, setVenues]             = useState([])
@@ -27,9 +29,10 @@ export default function Orders() {
   const [toast, setToast]               = useState('')
 
   // Modal state
-  const [summaryOrderId, setSummaryOrderId]   = useState(null)  // HU024
+  const [summaryOrderId, setSummaryOrderId]       = useState(null)  // HU024
   const [summaryRefreshKey, setSummaryRefreshKey] = useState(0)
-  const [addItemOrder, setAddItemOrder]       = useState(null)  // HU023
+  const [addItemOrder, setAddItemOrder]           = useState(null)  // HU023
+  const [checkoutOrder, setCheckoutOrder]         = useState(null)  // HU025
 
   const authHeaders = { Authorization: `Bearer ${currentUser?.token ?? ''}` }
 
@@ -132,6 +135,17 @@ export default function Orders() {
     fetchOrders()
   }
 
+  function handleGoToPayment(order) {
+    setSummaryOrderId(null)
+    setCheckoutOrder(order)
+  }
+
+  function handlePaymentSuccess(orderId) {
+    setCheckoutOrder(null)
+    setOrders(prev => prev.filter(o => o.id !== orderId))
+    setToast(`Payment processed for Order #${orderId}`)
+  }
+
   const openOrders = orders.filter(o => o.estado === 'abierto')
   const headerTitle = venueName ? `Orders Dashboard — ${venueName}` : 'Orders Dashboard'
 
@@ -154,12 +168,24 @@ export default function Orders() {
           orderId={summaryOrderId}
           authHeaders={authHeaders}
           refreshKey={summaryRefreshKey}
+          canPay={canPay}
           onAddMore={() => {
             const order = orders.find(o => o.id === summaryOrderId)
             if (order) setAddItemOrder(order)
           }}
+          onGoToPayment={handleGoToPayment}
           onItemRemoved={() => handleItemRemoved(summaryOrderId)}
           onClose={() => setSummaryOrderId(null)}
+        />
+      )}
+
+      {/* Checkout Modal (HU025) */}
+      {checkoutOrder && (
+        <CheckoutModal
+          order={checkoutOrder}
+          authHeaders={authHeaders}
+          onSuccess={handlePaymentSuccess}
+          onClose={() => setCheckoutOrder(null)}
         />
       )}
 
@@ -345,7 +371,7 @@ function OrderCard({ order, onCancel, onAddItem, onViewSummary }) {
 
 // ─── OrderSummaryModal (HU024) ────────────────────────────────────────────────
 
-function OrderSummaryModal({ orderId, authHeaders, refreshKey, onAddMore, onItemRemoved, onClose }) {
+function OrderSummaryModal({ orderId, authHeaders, refreshKey, canPay, onAddMore, onGoToPayment, onItemRemoved, onClose }) {
   const [order, setOrder]     = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState('')
@@ -535,16 +561,194 @@ function OrderSummaryModal({ orderId, authHeaders, refreshKey, onAddMore, onItem
                 Add More Items
               </button>
               <button
-                disabled
-                className="flex-1 py-2.5 rounded-lg text-sm font-semibold disabled:opacity-50 cursor-not-allowed"
-                style={{ backgroundColor: '#16a34a', color: '#fff' }}
-                title="Payment flow coming soon"
+                onClick={() => canPay && onGoToPayment(order)}
+                disabled={!canPay || items.length === 0}
+                className="flex-1 py-2.5 rounded-lg text-sm font-semibold transition-opacity disabled:opacity-50"
+                style={{ backgroundColor: '#16a34a', color: '#fff', cursor: canPay && items.length > 0 ? 'pointer' : 'not-allowed' }}
+                title={!canPay ? 'Only cashiers and admins can process payments' : items.length === 0 ? 'Add items before paying' : 'Process payment'}
               >
                 Go to Payment
               </button>
             </div>
           </>
         )}
+      </div>
+    </div>
+  )
+}
+
+// ─── CheckoutModal (HU025) ───────────────────────────────────────────────────
+
+const PAYMENT_METHODS = [
+  { key: 'efectivo',        label: 'Cash' },
+  { key: 'tarjeta_debito',  label: 'Debit Card' },
+  { key: 'tarjeta_credito', label: 'Credit Card' },
+]
+
+const METHOD_LABEL = {
+  efectivo:        'Cash',
+  tarjeta_debito:  'Debit Card',
+  tarjeta_credito: 'Credit Card',
+}
+
+function CheckoutModal({ order, authHeaders, onSuccess, onClose }) {
+  const [method, setMethod]           = useState(null)
+  const [submitting, setSubmitting]   = useState(false)
+  const [error, setError]             = useState('')
+  const [paymentData, setPaymentData] = useState(null)
+
+  const items      = order?.items ?? []
+  const grandTotal = items.reduce((sum, i) => sum + i.precio_unitario * i.cantidad, 0)
+
+  async function handleFinalize() {
+    if (!method || submitting) return
+    setSubmitting(true)
+    setError('')
+    try {
+      const res = await fetch(`${API}/orders/${order.id}/finalize`, {
+        method: 'POST',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ metodo_pago: method }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Payment failed')
+      setPaymentData(data)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  // ── HU027: Success confirmation screen ──────────────────────────────────────
+  if (paymentData) {
+    const fecha = paymentData.fecha
+      ? new Date(paymentData.fecha).toLocaleString('en-US', {
+          year: 'numeric', month: '2-digit', day: '2-digit',
+          hour: '2-digit', minute: '2-digit', hour12: false,
+        })
+      : '—'
+
+    return (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
+      >
+        <div
+          className="w-full max-w-sm rounded-xl overflow-hidden flex flex-col"
+          style={{ backgroundColor: 'var(--color-bg-surface)', border: '1px solid var(--color-border)' }}
+        >
+          {/* Green header */}
+          <div className="flex flex-col items-center gap-2 px-8 py-7" style={{ backgroundColor: '#16a34a' }}>
+            <div className="text-5xl font-bold text-white">✓</div>
+            <h2 className="text-lg font-bold text-white text-center">Success! Payment Received.</h2>
+            <p className="text-white/80 text-sm text-center">Transaction Completed Successfully</p>
+          </div>
+
+          {/* Details box */}
+          <div className="flex flex-col gap-3 px-6 py-5">
+            {[
+              { label: 'Order',   value: `#${order.id}` },
+              { label: 'Total',   value: formatCurrency(paymentData.total ?? grandTotal) },
+              { label: 'Method',  value: METHOD_LABEL[paymentData.metodo_pago] ?? paymentData.metodo_pago },
+              { label: 'Date',    value: fecha },
+            ].map(({ label, value }) => (
+              <div key={label} className="flex items-center justify-between text-sm">
+                <span style={{ color: 'var(--color-text-muted)' }}>{label}</span>
+                <span className="font-semibold" style={{ color: 'var(--color-text-primary)' }}>{value}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Action */}
+          <div className="px-6 pb-6">
+            <button
+              onClick={() => onSuccess(order.id)}
+              className="w-full py-3 rounded-lg text-sm font-bold"
+              style={{ backgroundColor: 'var(--color-brand-primary)', color: '#fff' }}
+            >
+              Back to Orders
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
+    >
+      <div
+        className="w-full max-w-md rounded-xl p-6 flex flex-col gap-5"
+        style={{ backgroundColor: 'var(--color-bg-surface)', border: '1px solid var(--color-border)' }}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-bold" style={{ color: 'var(--color-text-primary)' }}>
+            Checkout — Order #{order.id}
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-xl leading-none"
+            style={{ color: 'var(--color-text-muted)' }}
+            aria-label="Close"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Total */}
+        <div
+          className="rounded-lg px-4 py-3 flex items-center justify-between"
+          style={{ backgroundColor: 'var(--color-bg-alt)', border: '1px solid var(--color-border)' }}
+        >
+          <span className="text-sm font-medium" style={{ color: 'var(--color-text-muted)' }}>
+            Total to Pay
+          </span>
+          <span className="text-2xl font-bold" style={{ color: 'var(--color-brand-primary)' }}>
+            {formatCurrency(grandTotal)}
+          </span>
+        </div>
+
+        {/* Payment method selection */}
+        <div className="flex flex-col gap-2">
+          <p className="text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>
+            Select Payment Method
+          </p>
+          {PAYMENT_METHODS.map(({ key, label }) => {
+            const selected = method === key
+            return (
+              <button
+                key={key}
+                onClick={() => { setMethod(key); setError('') }}
+                className="w-full py-3 px-4 rounded-lg text-sm font-semibold text-left transition-all duration-150"
+                style={{
+                  border: `2px solid ${selected ? 'var(--color-brand-primary)' : 'var(--color-border)'}`,
+                  backgroundColor: selected ? 'var(--color-brand-primary)' : 'transparent',
+                  color: selected ? '#fff' : 'var(--color-text-primary)',
+                }}
+              >
+                {label}
+              </button>
+            )
+          })}
+        </div>
+
+        {error && (
+          <p className="text-sm font-medium" style={{ color: '#dc2626' }}>{error}</p>
+        )}
+
+        {/* Finalize */}
+        <button
+          onClick={handleFinalize}
+          disabled={!method || submitting}
+          className="w-full py-3 rounded-lg text-sm font-bold transition-opacity disabled:opacity-50"
+          style={{ backgroundColor: '#16a34a', color: '#fff', cursor: method && !submitting ? 'pointer' : 'not-allowed' }}
+        >
+          {submitting ? 'Processing…' : 'Finalize Transaction'}
+        </button>
       </div>
     </div>
   )
