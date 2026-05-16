@@ -3,10 +3,13 @@ import { useAuth } from '../context/AuthContext'
 
 const API = '/api/v1'
 
+function formatCurrency(amount) {
+  return `$${Number(amount).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
+}
+
 /**
- * Orders — Orders Dashboard (HU021) + Add Item with stock validation (HU023).
- * Mesero: crea pedidos para su sede, agrega items con validación de stock, cancela los propios.
- * Admin:  ídem pero elige sede al crear y puede cancelar cualquier pedido.
+ * Orders — HU021 (open/cancel orders) + HU023 (add item / stock validation)
+ *          + HU024 (order summary: item list, remove item, grand total).
  */
 export default function Orders() {
   const { user: currentUser } = useAuth()
@@ -14,17 +17,19 @@ export default function Orders() {
   const isAdmin  = currentUser?.rol === 'admin'
   const canView  = isWaiter || isAdmin
 
-  const [orders, setOrders]           = useState([])
-  const [venues, setVenues]           = useState([])
-  const [venueName, setVenueName]     = useState('')
+  const [orders, setOrders]             = useState([])
+  const [venues, setVenues]             = useState([])
+  const [venueName, setVenueName]       = useState('')
   const [adminVenueId, setAdminVenueId] = useState('')
-  const [loading, setLoading]         = useState(true)
-  const [error, setError]             = useState('')
-  const [creating, setCreating]       = useState(false)
-  const [toast, setToast]             = useState('')
+  const [loading, setLoading]           = useState(true)
+  const [error, setError]               = useState('')
+  const [creating, setCreating]         = useState(false)
+  const [toast, setToast]               = useState('')
 
-  // Add Item modal state
-  const [addItemOrder, setAddItemOrder] = useState(null) // order object | null
+  // Modal state
+  const [summaryOrderId, setSummaryOrderId]   = useState(null)  // HU024
+  const [summaryRefreshKey, setSummaryRefreshKey] = useState(0)
+  const [addItemOrder, setAddItemOrder]       = useState(null)  // HU023
 
   const authHeaders = { Authorization: `Bearer ${currentUser?.token ?? ''}` }
 
@@ -108,6 +113,7 @@ export default function Orders() {
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error || 'Failed to cancel order')
       setOrders(prev => prev.filter(o => o.id !== orderId))
+      if (summaryOrderId === orderId) setSummaryOrderId(null)
       setToast(`Order #${orderId} cancelled`)
     } catch (err) {
       setError(err.message)
@@ -117,6 +123,13 @@ export default function Orders() {
   function handleItemAdded(orderId) {
     setToast(`Item added to Order #${orderId}`)
     setAddItemOrder(null)
+    setSummaryRefreshKey(k => k + 1)
+    fetchOrders()
+  }
+
+  function handleItemRemoved(orderId) {
+    setToast(`Item removed from Order #${orderId}`)
+    fetchOrders()
   }
 
   const openOrders = orders.filter(o => o.estado === 'abierto')
@@ -134,7 +147,23 @@ export default function Orders() {
         </div>
       )}
 
-      {/* Add Item Modal */}
+      {/* Order Summary Modal (HU024) */}
+      {summaryOrderId && (
+        <OrderSummaryModal
+          key={summaryOrderId}
+          orderId={summaryOrderId}
+          authHeaders={authHeaders}
+          refreshKey={summaryRefreshKey}
+          onAddMore={() => {
+            const order = orders.find(o => o.id === summaryOrderId)
+            if (order) setAddItemOrder(order)
+          }}
+          onItemRemoved={() => handleItemRemoved(summaryOrderId)}
+          onClose={() => setSummaryOrderId(null)}
+        />
+      )}
+
+      {/* Add Item Modal (HU023) */}
       {addItemOrder && (
         <AddItemModal
           order={addItemOrder}
@@ -219,6 +248,7 @@ export default function Orders() {
               order={order}
               onCancel={handleCancel}
               onAddItem={() => setAddItemOrder(order)}
+              onViewSummary={() => setSummaryOrderId(order.id)}
             />
           ))}
         </div>
@@ -229,7 +259,7 @@ export default function Orders() {
 
 // ─── OrderCard ────────────────────────────────────────────────────────────────
 
-function OrderCard({ order, onCancel, onAddItem }) {
+function OrderCard({ order, onCancel, onAddItem, onViewSummary }) {
   const started    = new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   const waiterName = order.usuario?.nombre ?? order.usuario?.username ?? '—'
 
@@ -270,6 +300,21 @@ function OrderCard({ order, onCancel, onAddItem }) {
       {/* Actions */}
       <div className="mt-2 flex flex-col gap-2">
         <button
+          onClick={onViewSummary}
+          className="w-full py-2 rounded-lg text-sm font-semibold border transition-colors duration-150"
+          style={{ borderColor: 'var(--color-brand-primary)', color: 'var(--color-brand-primary)', backgroundColor: 'transparent' }}
+          onMouseEnter={e => {
+            e.currentTarget.style.backgroundColor = 'var(--color-brand-primary)'
+            e.currentTarget.style.color = '#fff'
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.backgroundColor = 'transparent'
+            e.currentTarget.style.color = 'var(--color-brand-primary)'
+          }}
+        >
+          View Summary
+        </button>
+        <button
           onClick={onAddItem}
           className="w-full py-2 rounded-lg text-sm font-semibold transition-colors duration-150"
           style={{ backgroundColor: 'var(--color-brand-primary)', color: '#fff' }}
@@ -298,7 +343,214 @@ function OrderCard({ order, onCancel, onAddItem }) {
   )
 }
 
-// ─── AddItemModal ─────────────────────────────────────────────────────────────
+// ─── OrderSummaryModal (HU024) ────────────────────────────────────────────────
+
+function OrderSummaryModal({ orderId, authHeaders, refreshKey, onAddMore, onItemRemoved, onClose }) {
+  const [order, setOrder]     = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError]     = useState('')
+  const [removing, setRemoving] = useState(null)
+
+  useEffect(() => {
+    setLoading(true)
+    setError('')
+    fetch(`${API}/orders/${orderId}`, { headers: authHeaders })
+      .then(r => r.json())
+      .then(data => {
+        if (data.error) throw new Error(data.error)
+        setOrder(data)
+      })
+      .catch(err => setError(err.message))
+      .finally(() => setLoading(false))
+  }, [orderId, refreshKey])
+
+  const items    = order?.items ?? []
+  const isOpen   = order?.estado === 'abierto'
+  const grandTotal = items.reduce((sum, item) => sum + item.precio_unitario * item.cantidad, 0)
+
+  async function handleRemove(itemId) {
+    setRemoving(itemId)
+    setError('')
+    try {
+      const res = await fetch(`${API}/orders/${orderId}/items/${itemId}`, {
+        method: 'DELETE',
+        headers: authHeaders,
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Failed to remove item')
+      setOrder(prev => ({ ...prev, items: prev.items.filter(i => i.id !== itemId) }))
+      onItemRemoved()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setRemoving(null)
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-40 flex items-center justify-center p-4"
+      style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+    >
+      <div
+        className="w-full max-w-2xl rounded-xl p-6 flex flex-col gap-4"
+        style={{
+          backgroundColor: 'var(--color-bg-surface)',
+          border: '1px solid var(--color-border)',
+          maxHeight: '90vh',
+          overflowY: 'auto',
+        }}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-bold" style={{ color: 'var(--color-text-primary)' }}>
+            Order Summary — #{orderId}
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-xl leading-none"
+            style={{ color: 'var(--color-text-muted)' }}
+            aria-label="Close"
+          >
+            ✕
+          </button>
+        </div>
+
+        {loading ? (
+          <p className="text-sm py-6 text-center" style={{ color: 'var(--color-text-muted)' }}>Loading…</p>
+        ) : error ? (
+          <p className="text-sm font-medium" style={{ color: '#dc2626' }}>{error}</p>
+        ) : order && (
+          <>
+            {/* Order meta */}
+            <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
+              <span style={{ color: 'var(--color-text-muted)' }}>
+                <span className="font-medium" style={{ color: 'var(--color-text-primary)' }}>Waiter: </span>
+                {order.usuario?.nombre ?? order.usuario?.username ?? '—'}
+              </span>
+              <span style={{ color: 'var(--color-text-muted)' }}>
+                <span className="font-medium" style={{ color: 'var(--color-text-primary)' }}>Location: </span>
+                {order.sede?.nombre ?? '—'}
+              </span>
+            </div>
+
+            {/* Items table */}
+            {items.length === 0 ? (
+              <p className="text-sm py-8 text-center" style={{ color: 'var(--color-text-muted)' }}>
+                No items yet. Use "Add More Items" to get started.
+              </p>
+            ) : (
+              <div className="overflow-x-auto rounded-lg" style={{ border: '1px solid var(--color-border)' }}>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr style={{ backgroundColor: 'var(--color-bg-alt)', borderBottom: '1px solid var(--color-border)' }}>
+                      <th className="text-left px-4 py-2 font-semibold" style={{ color: 'var(--color-text-muted)' }}>Product</th>
+                      <th className="text-center px-4 py-2 font-semibold" style={{ color: 'var(--color-text-muted)' }}>Quantity</th>
+                      <th className="text-right px-4 py-2 font-semibold" style={{ color: 'var(--color-text-muted)' }}>Unit Price</th>
+                      <th className="text-right px-4 py-2 font-semibold" style={{ color: 'var(--color-text-muted)' }}>Subtotal</th>
+                      {isOpen && <th className="px-4 py-2"></th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map((item, idx) => (
+                      <tr
+                        key={item.id}
+                        style={{ borderTop: idx > 0 ? '1px solid var(--color-border)' : 'none' }}
+                      >
+                        <td className="px-4 py-3" style={{ color: 'var(--color-text-primary)' }}>
+                          {item.producto?.nombre ?? `Product #${item.producto_id}`}
+                          {item.notas && (
+                            <span className="block text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
+                              {item.notas}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-center" style={{ color: 'var(--color-text-primary)' }}>
+                          {item.cantidad}
+                        </td>
+                        <td className="px-4 py-3 text-right" style={{ color: 'var(--color-text-primary)' }}>
+                          {formatCurrency(item.precio_unitario)}
+                        </td>
+                        <td className="px-4 py-3 text-right font-semibold" style={{ color: 'var(--color-text-primary)' }}>
+                          {formatCurrency(item.precio_unitario * item.cantidad)}
+                        </td>
+                        {isOpen && (
+                          <td className="px-4 py-3 text-center">
+                            <button
+                              onClick={() => handleRemove(item.id)}
+                              disabled={removing === item.id}
+                              className="text-xs px-2 py-1 rounded font-medium transition-colors disabled:opacity-40"
+                              style={{ color: '#dc2626', border: '1px solid #dc2626', backgroundColor: 'transparent' }}
+                              onMouseEnter={e => {
+                                if (removing !== item.id) {
+                                  e.currentTarget.style.backgroundColor = '#dc2626'
+                                  e.currentTarget.style.color = '#fff'
+                                }
+                              }}
+                              onMouseLeave={e => {
+                                e.currentTarget.style.backgroundColor = 'transparent'
+                                e.currentTarget.style.color = '#dc2626'
+                              }}
+                            >
+                              {removing === item.id ? '…' : 'Remove'}
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Grand Total */}
+            <div
+              className="flex justify-end items-center gap-3 pt-3"
+              style={{ borderTop: '1px solid var(--color-border)' }}
+            >
+              <span className="text-base font-bold" style={{ color: 'var(--color-text-primary)' }}>
+                Total Amount:
+              </span>
+              <span className="text-2xl font-bold" style={{ color: 'var(--color-brand-primary)' }}>
+                {formatCurrency(grandTotal)}
+              </span>
+            </div>
+
+            {/* Remove error */}
+            {error && (
+              <p className="text-sm font-medium" style={{ color: '#dc2626' }}>{error}</p>
+            )}
+
+            {/* Action buttons */}
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={onAddMore}
+                className="flex-1 py-2.5 rounded-lg text-sm font-semibold transition-colors"
+                style={{
+                  backgroundColor: 'var(--color-bg-alt)',
+                  color: 'var(--color-text-primary)',
+                  border: '1px solid var(--color-border)',
+                }}
+              >
+                Add More Items
+              </button>
+              <button
+                disabled
+                className="flex-1 py-2.5 rounded-lg text-sm font-semibold disabled:opacity-50 cursor-not-allowed"
+                style={{ backgroundColor: '#16a34a', color: '#fff' }}
+                title="Payment flow coming soon"
+              >
+                Go to Payment
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── AddItemModal (HU023) ─────────────────────────────────────────────────────
 
 function AddItemModal({ order, authHeaders, onSuccess, onClose }) {
   const [inventory, setInventory] = useState([])
@@ -309,7 +561,6 @@ function AddItemModal({ order, authHeaders, onSuccess, onClose }) {
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
 
-  // Fetch inventory for the order's venue.
   useEffect(() => {
     setLoadingInv(true)
     fetch(`${API}/inventory?venue_id=${order.sede_id}`, { headers: authHeaders })
@@ -322,12 +573,11 @@ function AddItemModal({ order, authHeaders, onSuccess, onClose }) {
   const selectedItem = inventory.find(i => String(i.producto_id) === String(selectedId))
   const available    = selectedItem?.stock_actual ?? null
 
-  const qty            = parseInt(quantity, 10)
-  const qtyValid       = !isNaN(qty) && qty > 0
-  const stockOk        = available === null || (qtyValid && qty <= available)
-  const canSubmit      = selectedId && qtyValid && stockOk && !submitting
+  const qty       = parseInt(quantity, 10)
+  const qtyValid  = !isNaN(qty) && qty > 0
+  const stockOk   = available === null || (qtyValid && qty <= available)
+  const canSubmit = selectedId && qtyValid && stockOk && !submitting
 
-  // Inline validation message
   let stockMsg = ''
   if (selectedItem && available === 0) {
     stockMsg = 'Out of stock at this location.'
@@ -344,11 +594,7 @@ function AddItemModal({ order, authHeaders, onSuccess, onClose }) {
       const res = await fetch(`${API}/orders/${order.id}/items`, {
         method: 'POST',
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          product_id: Number(selectedId),
-          cantidad:   qty,
-          notas:      notes,
-        }),
+        body: JSON.stringify({ product_id: Number(selectedId), cantidad: qty, notas: notes }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error || 'Failed to add item')
@@ -362,14 +608,13 @@ function AddItemModal({ order, authHeaders, onSuccess, onClose }) {
 
   return (
     <div
-      className="fixed inset-0 z-40 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
     >
       <div
         className="w-full max-w-md rounded-xl p-6 flex flex-col gap-4"
         style={{ backgroundColor: 'var(--color-bg-surface)', border: '1px solid var(--color-border)' }}
       >
-        {/* Modal header */}
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold" style={{ color: 'var(--color-text-primary)' }}>
             Add Item — Order #{order.id}
@@ -388,7 +633,6 @@ function AddItemModal({ order, authHeaders, onSuccess, onClose }) {
           <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Loading products…</p>
         ) : (
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-            {/* Product selector */}
             <div>
               <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text-primary)' }}>
                 Product
@@ -401,19 +645,13 @@ function AddItemModal({ order, authHeaders, onSuccess, onClose }) {
               >
                 <option value="">Select a product…</option>
                 {inventory.map(inv => (
-                  <option
-                    key={inv.producto_id}
-                    value={inv.producto_id}
-                    disabled={inv.stock_actual === 0}
-                  >
+                  <option key={inv.producto_id} value={inv.producto_id} disabled={inv.stock_actual === 0}>
                     {inv.producto?.nombre ?? `Product #${inv.producto_id}`}
                     {' — '}
                     {inv.stock_actual === 0 ? 'Out of Stock' : `Available: ${inv.stock_actual}`}
                   </option>
                 ))}
               </select>
-
-              {/* Available counter shown below selector */}
               {selectedItem && available > 0 && (
                 <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>
                   Available: <span className="font-semibold">{available}</span> unit{available !== 1 ? 's' : ''}
@@ -421,32 +659,34 @@ function AddItemModal({ order, authHeaders, onSuccess, onClose }) {
               )}
             </div>
 
-            {/* Quantity input */}
             <div>
               <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text-primary)' }}>
                 Quantity
               </label>
               <input
-                type="number"
-                min="1"
-                max={available ?? undefined}
+                type="text"
+                inputMode="numeric"
                 value={quantity}
-                onChange={e => { setQuantity(e.target.value); setSubmitError('') }}
+                onChange={e => { setQuantity(e.target.value.replace(/[^\d]/g, '')); setSubmitError('') }}
+                onKeyDown={e => {
+                  const passThrough = ['Backspace','Delete','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Tab','Enter']
+                  if (!passThrough.includes(e.key) && !/^\d$/.test(e.key)) e.preventDefault()
+                }}
+                onPaste={e => {
+                  const text = e.clipboardData.getData('text')
+                  if (!/^\d+$/.test(text.trim())) e.preventDefault()
+                }}
                 className="input-field w-full"
                 style={stockMsg ? { borderColor: '#dc2626' } : {}}
                 placeholder="e.g. 2"
                 disabled={!selectedId || available === 0}
                 required
               />
-              {/* Stock validation message */}
               {stockMsg && (
-                <p className="text-xs mt-1 font-medium" style={{ color: '#dc2626' }}>
-                  {stockMsg}
-                </p>
+                <p className="text-xs mt-1 font-medium" style={{ color: '#dc2626' }}>{stockMsg}</p>
               )}
             </div>
 
-            {/* Notes (optional) */}
             <div>
               <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text-primary)' }}>
                 Notes <span style={{ color: 'var(--color-text-muted)', fontWeight: 400 }}>(optional)</span>
@@ -460,14 +700,10 @@ function AddItemModal({ order, authHeaders, onSuccess, onClose }) {
               />
             </div>
 
-            {/* Server error */}
             {submitError && (
-              <p className="text-sm font-medium" style={{ color: '#dc2626' }}>
-                {submitError}
-              </p>
+              <p className="text-sm font-medium" style={{ color: '#dc2626' }}>{submitError}</p>
             )}
 
-            {/* Actions */}
             <div className="flex gap-2 pt-1">
               <button
                 type="submit"

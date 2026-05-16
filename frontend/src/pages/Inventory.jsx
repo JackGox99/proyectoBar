@@ -532,29 +532,27 @@ export default function Inventory() {
                   Quantity to Add
                 </label>
                 <input
-                  type="number"
-                  min="1"
-                  step="1"
+                  type="text"
+                  inputMode="numeric"
                   required
                   placeholder="Enter whole units (e.g. 12)"
                   value={entryQty}
                   onKeyDown={(e) => {
-                    // Bloquea caracteres que producirían un Float y muestra el aviso inmediato.
-                    if (['.', ',', 'e', 'E', '+', '-'].includes(e.key)) {
+                    const passThrough = ['Backspace','Delete','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Tab','Enter']
+                    if (!passThrough.includes(e.key) && !/^\d$/.test(e.key)) {
                       e.preventDefault()
                       setQtyError('Only whole units are allowed')
                     }
                   }}
                   onPaste={(e) => {
-                    // Si pegan algo con decimal/coma, lo bloqueamos también.
                     const text = e.clipboardData.getData('text')
-                    if (/[.,eE+\-]/.test(text)) {
+                    if (!/^\d+$/.test(text.trim())) {
                       e.preventDefault()
                       setQtyError('Only whole units are allowed')
                     }
                   }}
                   onChange={(e) => {
-                    setEntryQty(e.target.value)
+                    setEntryQty(e.target.value.replace(/[^\d]/g, ''))
                     if (qtyError) setQtyError('')
                   }}
                   className="w-full px-3 py-2 rounded-md text-sm outline-none"

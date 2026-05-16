@@ -16,6 +16,7 @@ type Order struct {
 	UsuarioID uint         `gorm:"not null"                                  json:"usuario_id"`
 	Usuario   User         `gorm:"foreignKey:UsuarioID"                      json:"usuario,omitempty"`
 	Estado    EstadoPedido `gorm:"type:enum('abierto','pagado');not null;default:'abierto'" json:"estado"`
+	Items     []OrderItem  `gorm:"foreignKey:PedidoID"                       json:"items,omitempty"`
 	CreatedAt time.Time    `gorm:"autoCreateTime"                            json:"created_at"`
 	CerradoAt *time.Time   `                                                 json:"cerrado_at"`
 }

@@ -10,7 +10,8 @@ import { useAuth } from '../context/AuthContext'
 export default function Dashboard() {
   const { user } = useAuth()
   const token = user?.token ?? ''
-  const isAdmin = user?.rol === 'admin'
+  const isAdmin  = user?.rol === 'admin'
+  const canOrder = user?.rol === 'admin' || user?.rol === 'mesero'
 
   const [stats, setStats] = useState({
     products: null,
@@ -19,6 +20,7 @@ export default function Dashboard() {
     venues: null,
     inventoryRows: null,
     lowStock: null,
+    openOrders: null,
   })
 
   useEffect(() => {
@@ -37,12 +39,11 @@ export default function Dashboard() {
     }
 
     async function load() {
-      const [products, categories, users, venues, inventory] = await Promise.all([
+      const [products, categories, users, venues, inventory, orders] = await Promise.all([
         safeCount('/api/v1/products', (p) => p.activo !== false),
         safeCount('/api/v1/categories'),
         safeCount('/api/v1/users'),
         safeCount('/api/v1/venues'),
-        // Inventory endpoint also returns items; derive lowStock client-side.
         (async () => {
           try {
             const res = await fetch('/api/v1/inventory', { headers })
@@ -57,6 +58,7 @@ export default function Dashboard() {
             return null
           }
         })(),
+        safeCount('/api/v1/orders', (o) => o.estado === 'abierto'),
       ])
 
       setStats({
@@ -66,6 +68,7 @@ export default function Dashboard() {
         venues,
         inventoryRows: inventory?.total ?? null,
         lowStock: inventory?.low ?? null,
+        openOrders: orders,
       })
     }
 
@@ -79,16 +82,16 @@ export default function Dashboard() {
     { label: 'Categories',       value: fmt(stats.categories),    color: 'var(--color-accent)' },
     { label: 'Inventory Items',  value: fmt(stats.inventoryRows), color: 'var(--color-brand-primary)' },
     { label: 'Low Stock Alerts', value: fmt(stats.lowStock),      color: 'var(--color-error)' },
-    { label: 'Venues',           value: fmt(stats.venues),        color: 'var(--color-accent)' },
+    { label: 'Open Orders',      value: canOrder ? fmt(stats.openOrders) : '—', color: 'var(--color-accent)' },
     { label: 'Users',            value: isAdmin ? fmt(stats.users) : '—', color: 'var(--color-success)' },
   ]
 
   const MODULES = [
-    { name: 'Inventory',  desc: 'Track stock levels per venue.',     icon: '📦', to: '/inventory',  ready: true },
+    { name: 'Inventory',  desc: 'Track stock levels per venue.',      icon: '📦', to: '/inventory',  ready: true },
+    { name: 'Orders',     desc: 'Open, manage and summarize orders.', icon: '🧾', to: '/orders',     ready: canOrder },
     { name: 'Products',   desc: 'Manage the global product catalog.', icon: '🍺', to: '/products',   ready: isAdmin },
     { name: 'Categories', desc: 'Organize products by category.',     icon: '📂', to: '/categories', ready: isAdmin },
     { name: 'Users',      desc: 'Staff accounts and roles.',          icon: '👤', to: '/users',      ready: isAdmin },
-    { name: 'Orders',     desc: 'Manage open and paid orders.',       icon: '🧾', to: null,          ready: false },
     { name: 'Reports',    desc: 'Sales and low-stock reports.',       icon: '📊', to: null,          ready: false },
     { name: 'Settings',   desc: 'Configure venues and preferences.',  icon: '⚙️', to: null,          ready: false },
   ]

@@ -56,7 +56,21 @@ func (oc *OrderController) List(c *gin.Context) {
 }
 
 func (oc *OrderController) GetByID(c *gin.Context) {
-	c.JSON(http.StatusNotImplemented, gin.H{"message": "not implemented"})
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid order id"})
+		return
+	}
+	order, err := oc.service.GetByID(uint(id))
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "order not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, order)
 }
 
 // Create abre un nuevo pedido (HU021).
@@ -194,6 +208,42 @@ func (oc *OrderController) AddItem(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusCreated, item)
+}
+
+// RemoveItem elimina un ítem de un pedido abierto (HU024).
+func (oc *OrderController) RemoveItem(c *gin.Context) {
+	claims, ok := extractClaims(c)
+	if !ok {
+		return
+	}
+	if claims.Rol != models.RolMesero && claims.Rol != models.RolAdmin {
+		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden: insufficient privileges"})
+		return
+	}
+
+	orderID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid order id"})
+		return
+	}
+	itemID, err := strconv.ParseUint(c.Param("itemId"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid item id"})
+		return
+	}
+
+	if err := oc.service.RemoveItem(uint(orderID), uint(itemID)); err != nil {
+		switch {
+		case errors.Is(err, services.ErrOrderNotOpen):
+			c.JSON(http.StatusConflict, gin.H{"error": "order is not open"})
+		case errors.Is(err, gorm.ErrRecordNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": "item not found"})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		}
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "item removed"})
 }
 
 func (oc *OrderController) Pay(c *gin.Context) {
