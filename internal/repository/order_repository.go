@@ -14,6 +14,7 @@ type OrderRepository interface {
 	FindByStatus(status models.EstadoPedido) ([]models.Order, error)
 	Create(o *models.Order) error
 	Update(o *models.Order) error
+	Delete(id uint) error
 	AddItem(item *models.OrderItem) error
 }
 
@@ -37,7 +38,16 @@ func (r *orderRepository) FindByID(id uint) (*models.Order, error) {
 
 func (r *orderRepository) FindByVenueID(venueID uint) ([]models.Order, error) {
 	var orders []models.Order
-	return orders, r.db.Where("sede_id = ?", venueID).Find(&orders).Error
+	return orders, r.db.
+		Where("sede_id = ?", venueID).
+		Preload("Sede").
+		Preload("Usuario").
+		Order("created_at DESC").
+		Find(&orders).Error
+}
+
+func (r *orderRepository) Delete(id uint) error {
+	return r.db.Delete(&models.Order{}, id).Error
 }
 
 func (r *orderRepository) FindByStatus(status models.EstadoPedido) ([]models.Order, error) {
