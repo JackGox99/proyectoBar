@@ -24,6 +24,11 @@ type InventoryRepository interface {
 	// de tipo "entrada" en una única transacción. Si la fila de inventario no existe,
 	// se crea con stock_actual=cantidad. Valida que el producto esté activo.
 	AddStock(venueID, productID uint, quantity int, userID uint) (*models.Inventory, error)
+	// FindEntryMovements retorna los movimientos de tipo "entrada" (HU020).
+	// - venueID nil = sin filtro (admin viendo todas las sedes).
+	// - productSearch != "" filtra por nombre de producto (LIKE case-insensitive).
+	// Resultados en orden cronológico descendente (más reciente primero).
+	FindEntryMovements(venueID *uint, productSearch string) ([]models.InventoryMovement, error)
 }
 
 type inventoryRepository struct {
@@ -73,6 +78,33 @@ func (r *inventoryRepository) Update(inv *models.Inventory) error {
 
 func (r *inventoryRepository) AddMovement(mov *models.InventoryMovement) error {
 	return r.db.Create(mov).Error
+}
+
+// FindEntryMovements retorna las entradas manuales para el historial (HU020).
+// - JOIN con inventario para filtrar por sede.
+// - JOIN con productos solo si hay búsqueda por nombre.
+// - Solo tipo="entrada" (HU018); otros tipos son auditorías distintas.
+// - Orden DESC por fecha para mostrar primero el movimiento más reciente.
+func (r *inventoryRepository) FindEntryMovements(venueID *uint, productSearch string) ([]models.InventoryMovement, error) {
+	var movements []models.InventoryMovement
+
+	q := r.db.
+		Joins("JOIN inventario ON inventario.id = movimientos_inventario.inventario_id").
+		Where("movimientos_inventario.tipo = ?", models.TipoEntrada).
+		Preload("Usuario").
+		Preload("Inventario.Producto").
+		Preload("Inventario.Sede")
+
+	if venueID != nil {
+		q = q.Where("inventario.sede_id = ?", *venueID)
+	}
+	if productSearch != "" {
+		q = q.
+			Joins("JOIN productos ON productos.id = inventario.producto_id").
+			Where("LOWER(productos.nombre) LIKE LOWER(?)", "%"+productSearch+"%")
+	}
+
+	return movements, q.Order("movimientos_inventario.fecha DESC").Find(&movements).Error
 }
 
 // AddStock registra una entrada manual (HU018).

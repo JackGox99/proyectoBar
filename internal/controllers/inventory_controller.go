@@ -78,6 +78,61 @@ func (ic *InventoryController) GetByID(c *gin.Context) {
 	c.JSON(http.StatusNotImplemented, gin.H{"message": "not implemented"})
 }
 
+// ListMovements retorna el historial de entradas manuales (HU020) aplicando RBAC:
+// - Cajero: solo movimientos de su sede asignada (SedeID del JWT). Cualquier
+//   ?venue_id= se ignora; si no tiene sede, 403.
+// - Admin:  por defecto ve todas las sedes; puede filtrar con ?venue_id=.
+// - Otros roles: 403.
+//
+// Filtro opcional ?product= aplica búsqueda parcial sobre el nombre del producto.
+// Resultados ordenados cronológicamente DESC (más reciente primero).
+func (ic *InventoryController) ListMovements(c *gin.Context) {
+	raw, exists := c.Get(middleware.CtxClaims)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+		return
+	}
+	claims, ok := raw.(*services.TokenClaims)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid authentication context"})
+		return
+	}
+
+	productSearch := c.Query("product")
+
+	var venueID *uint
+	switch claims.Rol {
+	case models.RolAdmin:
+		if q := c.Query("venue_id"); q != "" {
+			id, err := strconv.ParseUint(q, 10, 64)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid venue_id"})
+				return
+			}
+			v := uint(id)
+			venueID = &v
+		}
+		// Sin venue_id: venueID == nil → todas las sedes.
+	case models.RolCajero:
+		if claims.SedeID == nil {
+			c.JSON(http.StatusForbidden, gin.H{"error": "cashier has no assigned location"})
+			return
+		}
+		// Forzar la sede del JWT, ignorando cualquier venue_id del query.
+		venueID = claims.SedeID
+	default:
+		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden: insufficient privileges"})
+		return
+	}
+
+	movements, err := ic.service.ListEntryMovements(venueID, productSearch)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, movements)
+}
+
 func (ic *InventoryController) Create(c *gin.Context) {
 	c.JSON(http.StatusNotImplemented, gin.H{"message": "not implemented"})
 }

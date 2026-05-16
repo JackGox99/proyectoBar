@@ -26,6 +26,9 @@ type InventoryService interface {
 	AddMovement(inventoryID uint, mov *models.InventoryMovement) error
 	// AddStock registra una entrada manual de stock (HU018).
 	AddStock(venueID, productID uint, quantity int, userID uint) (*models.Inventory, error)
+	// ListEntryMovements retorna las entradas manuales para el historial (HU020).
+	// venueID nil = sin filtro (admin viendo todas las sedes).
+	ListEntryMovements(venueID *uint, productSearch string) ([]models.InventoryMovement, error)
 }
 
 type inventoryService struct {
@@ -60,6 +63,12 @@ func (s *inventoryService) Update(inv *models.Inventory) error {
 func (s *inventoryService) AddMovement(inventoryID uint, mov *models.InventoryMovement) error {
 	mov.InventarioID = inventoryID
 	return s.repo.AddMovement(mov)
+}
+
+// ListEntryMovements delega al repositorio el listado de entradas (HU020).
+// El controller resuelve el RBAC (cajero = solo su sede); aquí solo se pasa el filtro.
+func (s *inventoryService) ListEntryMovements(venueID *uint, productSearch string) ([]models.InventoryMovement, error) {
+	return s.repo.FindEntryMovements(venueID, productSearch)
 }
 
 // AddStock valida los campos y delega al repositorio la suma atómica (HU018).

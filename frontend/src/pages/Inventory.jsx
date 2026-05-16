@@ -1,12 +1,17 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useAuth } from '../context/AuthContext'
+import MovementHistory from '../components/inventory/MovementHistory'
 
 /**
- * Inventory — Local Stock Inquiry (HU017) + Manual Stock Entry (HU018).
+ * Inventory — Local Stock Inquiry (HU017) + Manual Stock Entry (HU018) +
+ * Stock Movement Log (HU020). Tab strip lets the user switch views.
  * Cashier sees only their assigned venue; admin sees global inventory.
  */
 export default function Inventory() {
   const { user: currentUser } = useAuth()
+
+  // HU020 — active tab: 'stock' (default) | 'history'.
+  const [activeTab, setActiveTab] = useState('stock')
 
   const [items, setItems]       = useState([])
   const [venues, setVenues]     = useState([])
@@ -218,8 +223,45 @@ export default function Inventory() {
     )
   }
 
+  const tabBtnStyle = (tab) => ({
+    color: activeTab === tab ? 'var(--color-brand-primary)' : 'var(--color-text-muted)',
+    borderBottom: activeTab === tab
+      ? '2px solid var(--color-brand-primary)'
+      : '2px solid transparent',
+  })
+
   return (
     <div>
+      {/* HU020 — Tab strip: Stock Status / Movement History */}
+      <div
+        className="mb-6 flex gap-2 border-b"
+        style={{ borderColor: 'var(--color-border)' }}
+        role="tablist"
+      >
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'stock'}
+          onClick={() => setActiveTab('stock')}
+          className="px-4 py-2 text-sm font-semibold -mb-px transition-colors duration-150"
+          style={tabBtnStyle('stock')}
+        >
+          Stock Status
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'history'}
+          onClick={() => setActiveTab('history')}
+          className="px-4 py-2 text-sm font-semibold -mb-px transition-colors duration-150"
+          style={tabBtnStyle('history')}
+        >
+          Movement History
+        </button>
+      </div>
+
+      {activeTab === 'stock' && (
+      <>
       {/* Page header */}
       <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
@@ -411,6 +453,10 @@ export default function Inventory() {
           </div>
         )}
       </div>
+      </>
+      )}
+
+      {activeTab === 'history' && <MovementHistory />}
 
       {/* Manual Stock Entry Modal (HU018) */}
       {modalOpen && (
