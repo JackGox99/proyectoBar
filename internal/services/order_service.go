@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 
+	"gorm.io/gorm"
+
 	"bar-inventory-api/internal/models"
 	"bar-inventory-api/internal/repository"
 )
@@ -42,6 +44,8 @@ type OrderService interface {
 	// AddItem agrega un producto al pedido validando stock disponible (HU023).
 	// Snapshot del precio tomado del precio actual del producto en inventario.
 	AddItem(orderID uint, item *models.OrderItem) error
+	// RemoveItem elimina un ítem de un pedido abierto (HU024).
+	RemoveItem(orderID, itemID uint) error
 	// Pay cierra el pedido y genera el registro de pago en una transacción.
 	Pay(orderID uint, payment *models.Payment) error
 }
@@ -138,7 +142,44 @@ func (s *orderService) AddItem(orderID uint, item *models.OrderItem) error {
 
 	item.PrecioUnitario = inv.Producto.Precio
 	item.PedidoID = orderID
-	return s.repo.AddItem(item)
+	if err := s.repo.AddItem(item); err != nil {
+		return err
+	}
+	return s.inventoryRepo.DecrementStock(inv.ID, item.Cantidad)
+}
+
+func (s *orderService) RemoveItem(orderID, itemID uint) error {
+	order, err := s.repo.FindByID(orderID)
+	if err != nil {
+		return err
+	}
+	if order.Estado != models.EstadoAbierto {
+		return ErrOrderNotOpen
+	}
+
+	// Locate the item within the preloaded Items slice before deleting it
+	// so we can restore the stock afterward.
+	var found *models.OrderItem
+	for i := range order.Items {
+		if order.Items[i].ID == itemID {
+			found = &order.Items[i]
+			break
+		}
+	}
+	if found == nil {
+		return gorm.ErrRecordNotFound
+	}
+
+	if err := s.repo.RemoveItem(orderID, itemID); err != nil {
+		return err
+	}
+
+	// Return the quantity back to inventory (negative decrement = increment).
+	inv, err := s.inventoryRepo.FindByVenueAndProduct(order.SedeID, found.ProductoID)
+	if err != nil || inv == nil {
+		return err
+	}
+	return s.inventoryRepo.DecrementStock(inv.ID, -found.Cantidad)
 }
 
 func (s *orderService) Pay(orderID uint, payment *models.Payment) error {

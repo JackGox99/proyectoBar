@@ -19,6 +19,8 @@ type InventoryRepository interface {
 	FindByVenueAndProduct(venueID, productID uint) (*models.Inventory, error)
 	Create(inv *models.Inventory) error
 	Update(inv *models.Inventory) error
+	// DecrementStock resta quantity al stock_actual en una sola sentencia UPDATE atómica.
+	DecrementStock(inventoryID uint, quantity int) error
 	AddMovement(mov *models.InventoryMovement) error
 	// AddStock suma cantidad al stock_actual del (sede, producto) y registra el movimiento
 	// de tipo "entrada" en una única transacción. Si la fila de inventario no existe,
@@ -83,6 +85,13 @@ func (r *inventoryRepository) Create(inv *models.Inventory) error {
 
 func (r *inventoryRepository) Update(inv *models.Inventory) error {
 	return r.db.Save(inv).Error
+}
+
+func (r *inventoryRepository) DecrementStock(inventoryID uint, quantity int) error {
+	return r.db.Model(&models.Inventory{}).
+		Where("id = ?", inventoryID).
+		UpdateColumn("stock_actual", gorm.Expr("stock_actual - ?", quantity)).
+		Error
 }
 
 func (r *inventoryRepository) AddMovement(mov *models.InventoryMovement) error {

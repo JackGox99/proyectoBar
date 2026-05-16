@@ -16,6 +16,7 @@ type OrderRepository interface {
 	Update(o *models.Order) error
 	Delete(id uint) error
 	AddItem(item *models.OrderItem) error
+	RemoveItem(orderID, itemID uint) error
 }
 
 type orderRepository struct {
@@ -33,7 +34,11 @@ func (r *orderRepository) FindAll() ([]models.Order, error) {
 
 func (r *orderRepository) FindByID(id uint) (*models.Order, error) {
 	var order models.Order
-	return &order, r.db.Preload("Sede").Preload("Usuario").First(&order, id).Error
+	return &order, r.db.
+		Preload("Sede").
+		Preload("Usuario").
+		Preload("Items.Producto").
+		First(&order, id).Error
 }
 
 func (r *orderRepository) FindByVenueID(venueID uint) ([]models.Order, error) {
@@ -65,4 +70,15 @@ func (r *orderRepository) Update(o *models.Order) error {
 
 func (r *orderRepository) AddItem(item *models.OrderItem) error {
 	return r.db.Create(item).Error
+}
+
+func (r *orderRepository) RemoveItem(orderID, itemID uint) error {
+	result := r.db.Where("id = ? AND pedido_id = ?", itemID, orderID).Delete(&models.OrderItem{})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
 }

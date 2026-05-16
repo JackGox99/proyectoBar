@@ -29,6 +29,23 @@ export default function Products() {
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleting, setDeleting]         = useState(false)
 
+  // Bloquea cualquier tecla que no sea dígito entero.
+  function blockNonInteger(e) {
+    const passThrough = ['Backspace','Delete','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Tab','Enter']
+    if (!passThrough.includes(e.key) && !/^\d$/.test(e.key)) {
+      e.preventDefault()
+    }
+  }
+  function blockNonIntegerPaste(e, setter) {
+    const text = e.clipboardData.getData('text')
+    if (!/^\d+$/.test(text.trim())) {
+      e.preventDefault()
+    } else {
+      setter(text.trim())
+      e.preventDefault()
+    }
+  }
+
   const isAdmin = currentUser?.rol === 'admin'
 
   const fetchProducts = useCallback(async () => {
@@ -317,12 +334,13 @@ export default function Products() {
                 Purchase Cost (COP)
               </label>
               <input
-                type="number"
-                min="1"
-                step="1"
+                type="text"
+                inputMode="numeric"
                 placeholder="e.g. 3000"
                 value={purchaseCost}
-                onChange={(e) => setPurchaseCost(e.target.value)}
+                onChange={(e) => setPurchaseCost(e.target.value.replace(/[^\d]/g, ''))}
+                onKeyDown={blockNonInteger}
+                onPaste={(e) => blockNonIntegerPaste(e, setPurchaseCost)}
                 required
                 className="w-full px-3 py-2 rounded-md text-sm outline-none transition-colors duration-150"
                 style={{
@@ -342,12 +360,13 @@ export default function Products() {
                 Sale Price (COP)
               </label>
               <input
-                type="number"
-                min="1"
-                step="1"
+                type="text"
+                inputMode="numeric"
                 placeholder="e.g. 5000"
                 value={salePrice}
-                onChange={(e) => setSalePrice(e.target.value)}
+                onChange={(e) => setSalePrice(e.target.value.replace(/[^\d]/g, ''))}
+                onKeyDown={blockNonInteger}
+                onPaste={(e) => blockNonIntegerPaste(e, setSalePrice)}
                 required
                 className="w-full px-3 py-2 rounded-md text-sm outline-none transition-colors duration-150"
                 style={{

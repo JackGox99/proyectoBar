@@ -107,9 +107,28 @@ func (s *productService) Create(p *models.Product, venueIDs []uint) error {
 		return ErrVenuesRequired
 	}
 
-	// Validar nombre único.
+	// Si el producto ya existe, agregar las sedes nuevas en lugar de rechazar.
 	if existing, err := s.repo.FindByName(p.Nombre); err == nil && existing != nil {
-		return ErrProductNameTaken
+		*p = *existing
+		added := 0
+		for _, vid := range uniqueVenues {
+			inv, invErr := s.inventoryRepo.FindByVenueAndProduct(vid, existing.ID)
+			if invErr != nil {
+				return invErr
+			}
+			if inv != nil {
+				continue // esta sede ya tiene el producto
+			}
+			newInv := &models.Inventory{SedeID: vid, ProductoID: existing.ID}
+			if invErr := s.inventoryRepo.Create(newInv); invErr != nil {
+				return invErr
+			}
+			added++
+		}
+		if added == 0 {
+			return ErrProductNameTaken // todas las sedes seleccionadas ya tenían el producto
+		}
+		return nil
 	} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return err
 	}
