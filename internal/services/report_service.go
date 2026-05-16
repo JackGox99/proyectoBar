@@ -4,46 +4,44 @@ import (
 	"bar-inventory-api/internal/repository"
 )
 
-// SalesReport será definido en detalle en la HU de Reportes.
-// Se declara aquí para que la interfaz compile y los controllers puedan ser creados.
-type SalesReport struct{} // TODO (HU-Reportes): añadir campos: total, fecha, desglose por sede.
-
-// InventoryReport será definido en detalle en la HU de Reportes.
-type InventoryReport struct{} // TODO (HU-Reportes): añadir campos: stock_bajo, movimientos.
+// SalesReportResponse es la respuesta completa del reporte de ventas (HU028).
+type SalesReportResponse struct {
+	KPIs        repository.ReportKPIs       `json:"kpis"`
+	TopProducts []repository.TopProduct     `json:"top_products"`
+	Rows        []repository.SalesReportRow `json:"rows"`
+}
 
 // ReportService define el contrato de lógica de reportes.
 type ReportService interface {
-	GetSalesReport() (*SalesReport, error)
-	GetInventoryReport() (*InventoryReport, error)
+	GetSalesReport(f repository.SalesFilter) (*SalesReportResponse, error)
 }
 
 type reportService struct {
-	orderRepo     repository.OrderRepository
-	inventoryRepo repository.InventoryRepository
-	paymentRepo   repository.PaymentRepository
+	reportRepo repository.ReportRepository
 }
 
-// NewReportService recibe los tres repos que necesitará para agregar datos.
-func NewReportService(
-	orderRepo repository.OrderRepository,
-	inventoryRepo repository.InventoryRepository,
-	paymentRepo repository.PaymentRepository,
-) ReportService {
-	return &reportService{
-		orderRepo:     orderRepo,
-		inventoryRepo: inventoryRepo,
-		paymentRepo:   paymentRepo,
+// NewReportService inyecta el ReportRepository.
+func NewReportService(reportRepo repository.ReportRepository) ReportService {
+	return &reportService{reportRepo: reportRepo}
+}
+
+// GetSalesReport consolida KPIs, top products y filas de detalle en una sola respuesta.
+func (s *reportService) GetSalesReport(f repository.SalesFilter) (*SalesReportResponse, error) {
+	kpis, err := s.reportRepo.GetKPIs(f)
+	if err != nil {
+		return nil, err
 	}
-}
-
-// GetSalesReport genera el reporte de ventas.
-// TODO (HU-Reportes): agregar pedidos pagados, totales por sede y método de pago.
-func (s *reportService) GetSalesReport() (*SalesReport, error) {
-	return &SalesReport{}, nil
-}
-
-// GetInventoryReport genera el reporte de inventario.
-// TODO (HU-Reportes): detectar productos con stock_actual < stock_minimo.
-func (s *reportService) GetInventoryReport() (*InventoryReport, error) {
-	return &InventoryReport{}, nil
+	top, err := s.reportRepo.GetTopProducts(f)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.reportRepo.GetRows(f)
+	if err != nil {
+		return nil, err
+	}
+	return &SalesReportResponse{
+		KPIs:        kpis,
+		TopProducts: top,
+		Rows:        rows,
+	}, nil
 }

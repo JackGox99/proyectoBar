@@ -132,10 +132,10 @@ func Register(r *gin.Engine, ctrl Controllers, authMiddleware gin.HandlerFunc) {
 		orders.POST("/:id/finalize", adminOrCashier, ctrl.Order.Finalize) // HU026
 	}
 
-	// Reports
-	reports := protected.Group("/reports")
+	// Reports — HU028: solo admin puede ver reportes de ventas.
+	reports := protected.Group("/reports", adminOnly)
 	{
-		reports.GET("/sales", ctrl.Report.Sales)
-		reports.GET("/inventory", ctrl.Report.Inventory)
+		reports.GET("/sales",     ctrl.Report.Sales)
+		reports.GET("/sales/csv", ctrl.Report.SalesCSV)
 	}
 }

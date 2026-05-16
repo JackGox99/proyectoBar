@@ -61,6 +61,7 @@ func (s *Server) setupRoutes() {
 	inventoryRepo := repository.NewInventoryRepository(s.db)
 	orderRepo     := repository.NewOrderRepository(s.db)
 	paymentRepo   := repository.NewPaymentRepository(s.db)
+	reportRepo    := repository.NewReportRepository(s.db)
 
 	// ── Capa de Servicios ─────────────────────────────────────────────────────
 	authSvc      := services.NewAuthService(userRepo, s.cfg)
@@ -70,7 +71,7 @@ func (s *Server) setupRoutes() {
 	productSvc   := services.NewProductService(productRepo, categoryRepo, venueRepo, inventoryRepo)
 	inventorySvc := services.NewInventoryService(inventoryRepo)
 	orderSvc     := services.NewOrderService(orderRepo, paymentRepo, inventoryRepo)
-	reportSvc    := services.NewReportService(orderRepo, inventoryRepo, paymentRepo)
+	reportSvc    := services.NewReportService(reportRepo)
 
 	// ── Capa de Controllers ───────────────────────────────────────────────────
 	ctrl := routes.Controllers{

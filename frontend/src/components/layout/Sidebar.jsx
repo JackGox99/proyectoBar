@@ -1,33 +1,21 @@
 import { NavLink } from 'react-router-dom'
+import { useAuth } from '../../context/AuthContext'
 
-/**
- * Navigation items definition.
- * Each entry will become a nav-item once the corresponding module is implemented.
- * Icon is a simple text emoji for now — replace with an icon library (e.g. lucide-react) later.
- */
 const NAV_ITEMS = [
-  { label: 'Dashboard',  to: '/',           icon: '▦' },
-  { label: 'Inventory',  to: '/inventory',  icon: '📦' },
-  { label: 'Orders',     to: '/orders',     icon: '🧾' },
-  { label: 'Products',   to: '/products',   icon: '🍺' },
-  { label: 'Categories', to: '/categories', icon: '📂' },
-  { label: 'Users',      to: '/users',      icon: '👤' },
-  { label: 'Reports',    to: '/reports',    icon: '📊' },
-  { label: 'My Profile', to: '/profile',   icon: '🔑' },
+  { label: 'Dashboard',  to: '/',           icon: '▦',  roles: null },
+  { label: 'Inventory',  to: '/inventory',  icon: '📦', roles: ['admin', 'mesero', 'cajero'] },
+  { label: 'Orders',     to: '/orders',     icon: '🧾', roles: ['admin', 'mesero', 'cajero'] },
+  { label: 'Products',   to: '/products',   icon: '🍺', roles: ['admin'] },
+  { label: 'Categories', to: '/categories', icon: '📂', roles: ['admin'] },
+  { label: 'Users',      to: '/users',      icon: '👤', roles: ['admin'] },
+  { label: 'Reports',    to: '/reports',    icon: '📊', roles: ['admin'] },
+  { label: 'My Profile', to: '/profile',    icon: '🔑', roles: null },
 ]
 
-/**
- * Sidebar
- *
- * Responsive navigation panel:
- *  - Desktop (md+): always visible, fixed on the left, below the header.
- *  - Mobile (<md): slides in as an overlay when `isOpen` is true.
- *
- * Props:
- *  isOpen       — whether the sidebar is visible on mobile
- *  onClose      — callback to close the sidebar (called on overlay click or nav click)
- */
 export default function Sidebar({ isOpen, onClose }) {
+  const { user } = useAuth()
+  const rol = user?.rol ?? ''
+  const visibleItems = NAV_ITEMS.filter(item => item.roles === null || item.roles.includes(rol))
   return (
     <>
       {/* Dark overlay — mobile only, shown when sidebar is open */}
@@ -68,7 +56,7 @@ export default function Sidebar({ isOpen, onClose }) {
         </div>
 
         <nav className="flex-1 px-2 pb-4">
-          {NAV_ITEMS.map(({ label, to, icon }) => (
+          {visibleItems.map(({ label, to, icon }) => (
             <NavLink
               key={to}
               to={to}

@@ -16,8 +16,9 @@ export default function Orders() {
   const isWaiter  = currentUser?.rol === 'mesero'
   const isAdmin   = currentUser?.rol === 'admin'
   const isCashier = currentUser?.rol === 'cajero'
-  const canView   = isWaiter || isAdmin || isCashier
-  const canPay    = isAdmin || isCashier
+  const canView     = isWaiter || isAdmin || isCashier
+  const canPay      = isAdmin || isCashier
+  const canAddItems = isAdmin || isWaiter
 
   const [orders, setOrders]             = useState([])
   const [venues, setVenues]             = useState([])
@@ -272,6 +273,7 @@ export default function Orders() {
             <OrderCard
               key={order.id}
               order={order}
+              canAddItems={canAddItems}
               onCancel={handleCancel}
               onAddItem={() => setAddItemOrder(order)}
               onViewSummary={() => setSummaryOrderId(order.id)}
@@ -285,7 +287,7 @@ export default function Orders() {
 
 // ─── OrderCard ────────────────────────────────────────────────────────────────
 
-function OrderCard({ order, onCancel, onAddItem, onViewSummary }) {
+function OrderCard({ order, canAddItems, onCancel, onAddItem, onViewSummary }) {
   const started    = new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   const waiterName = order.usuario?.nombre ?? order.usuario?.username ?? '—'
 
@@ -340,15 +342,17 @@ function OrderCard({ order, onCancel, onAddItem, onViewSummary }) {
         >
           View Summary
         </button>
-        <button
-          onClick={onAddItem}
-          className="w-full py-2 rounded-lg text-sm font-semibold transition-colors duration-150"
-          style={{ backgroundColor: 'var(--color-brand-primary)', color: '#fff' }}
-          onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
-          onMouseLeave={e => e.currentTarget.style.opacity = '1'}
-        >
-          + Add Item
-        </button>
+        {canAddItems && (
+          <button
+            onClick={onAddItem}
+            className="w-full py-2 rounded-lg text-sm font-semibold transition-colors duration-150"
+            style={{ backgroundColor: 'var(--color-brand-primary)', color: '#fff' }}
+            onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
+            onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+          >
+            + Add Item
+          </button>
+        )}
         <button
           onClick={() => onCancel(order.id)}
           className="w-full py-2 rounded-lg text-sm font-semibold border transition-colors duration-150"
