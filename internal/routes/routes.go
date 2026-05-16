@@ -102,10 +102,12 @@ func Register(r *gin.Engine, ctrl Controllers, authMiddleware gin.HandlerFunc) {
 
 	// Inventory — HU017: admin ve inventario global, cajero ve solo su sede.
 	// HU018: entrada manual de stock restringida a admin y cajero.
-	adminOrCashier := middleware.RequireRole(models.RolAdmin, models.RolCajero)
+	adminOrCashier        := middleware.RequireRole(models.RolAdmin, models.RolCajero)
+	adminCashierOrWaiter  := middleware.RequireRole(models.RolAdmin, models.RolCajero, models.RolMesero)
 	inventory := protected.Group("/inventory")
 	{
-		inventory.GET("", adminOrCashier, ctrl.Inventory.List)
+		// HU023: mesero también necesita leer stock de su sede para verificar disponibilidad.
+		inventory.GET("", adminCashierOrWaiter, ctrl.Inventory.List)
 		// /movements antes que /:id para evitar ambigüedad con la ruta dinámica.
 		inventory.GET("/movements", adminOrCashier, ctrl.Inventory.ListMovements) // HU020
 		inventory.GET("/:id", ctrl.Inventory.GetByID)
@@ -115,14 +117,16 @@ func Register(r *gin.Engine, ctrl Controllers, authMiddleware gin.HandlerFunc) {
 		inventory.POST("/:id/movements", ctrl.Inventory.AddMovement)
 	}
 
-	// Orders
+	// Orders — HU021: mesero y admin pueden abrir y cancelar pedidos.
+	adminOrWaiter := middleware.RequireRole(models.RolAdmin, models.RolMesero)
 	orders := protected.Group("/orders")
 	{
 		orders.GET("", ctrl.Order.List)
 		orders.GET("/:id", ctrl.Order.GetByID)
-		orders.POST("", ctrl.Order.Create)
+		orders.POST("", adminOrWaiter, ctrl.Order.Create)       // HU021
 		orders.PUT("/:id", ctrl.Order.Update)
-		orders.POST("/:id/items", ctrl.Order.AddItem)
+		orders.DELETE("/:id", adminOrWaiter, ctrl.Order.Cancel) // HU021
+		orders.POST("/:id/items", adminOrWaiter, ctrl.Order.AddItem) // HU023
 		orders.POST("/:id/pay", ctrl.Order.Pay)
 	}
 

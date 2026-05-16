@@ -56,9 +56,9 @@ func (ic *InventoryController) List(c *gin.Context) {
 		} else {
 			items, err = ic.service.List()
 		}
-	case models.RolCajero:
+	case models.RolCajero, models.RolMesero:
 		if claims.SedeID == nil {
-			c.JSON(http.StatusForbidden, gin.H{"error": "cashier has no assigned location"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "user has no assigned location"})
 			return
 		}
 		items, err = ic.service.ListByVenue(*claims.SedeID)

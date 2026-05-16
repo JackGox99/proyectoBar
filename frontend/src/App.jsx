@@ -9,6 +9,7 @@ import Profile          from './pages/Profile'
 import Categories       from './pages/Categories'
 import Products         from './pages/Products'
 import Inventory        from './pages/Inventory'
+import Orders           from './pages/Orders'
 
 /**
  * App — router root.
@@ -43,9 +44,9 @@ export default function App() {
             <Route path="categories" element={<Categories />} />
             <Route path="products"  element={<Products />} />
             <Route path="inventory" element={<Inventory />} />
+            <Route path="orders"    element={<Orders />} />
             <Route path="profile"   element={<Profile />} />
             {/* Future module routes:
-              <Route path="orders"    element={<Orders />} />
               <Route path="reports"   element={<Reports />} />
             */}
           </Route>
