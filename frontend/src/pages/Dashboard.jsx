@@ -9,9 +9,12 @@ import { useAuth } from '../context/AuthContext'
  */
 export default function Dashboard() {
   const { user } = useAuth()
-  const token = user?.token ?? ''
-  const isAdmin  = user?.rol === 'admin'
-  const canOrder = user?.rol === 'admin' || user?.rol === 'mesero'
+  const token     = user?.token ?? ''
+  const rol       = user?.rol ?? ''
+  const isAdmin   = rol === 'admin'
+  const isMesero  = rol === 'mesero'
+  const isCajero  = rol === 'cajero'
+  const canOrder  = isAdmin || isMesero || isCajero
 
   const [stats, setStats] = useState({
     products: null,
@@ -51,7 +54,8 @@ export default function Dashboard() {
             const data = await res.json()
             if (!Array.isArray(data)) return null
             const low = data.filter(
-              (i) => i.stock_minimo > 0 && i.stock_actual <= i.stock_minimo,
+              (i) => i.stock_actual === 0 ||
+                     (i.stock_minimo > 0 && i.stock_actual <= i.stock_minimo),
             ).length
             return { total: data.length, low }
           } catch {
@@ -86,14 +90,17 @@ export default function Dashboard() {
     { label: 'Users',            value: isAdmin ? fmt(stats.users) : '—', color: 'var(--color-success)' },
   ]
 
-  const MODULES = [
-    { name: 'Inventory',  desc: 'Track stock levels per venue.',      icon: '📦', to: '/inventory',  ready: true },
-    { name: 'Orders',     desc: 'Open, manage and summarize orders.', icon: '🧾', to: '/orders',     ready: canOrder },
-    { name: 'Products',   desc: 'Manage the global product catalog.', icon: '🍺', to: '/products',   ready: isAdmin },
-    { name: 'Categories', desc: 'Organize products by category.',     icon: '📂', to: '/categories', ready: isAdmin },
-    { name: 'Users',      desc: 'Staff accounts and roles.',          icon: '👤', to: '/users',      ready: isAdmin },
-    { name: 'Reports',    desc: 'Sales and low-stock reports.',       icon: '📊', to: null,          ready: false },
+  const ALL_MODULES = [
+    { name: 'Inventory',  desc: 'Track stock levels per venue.',      icon: '📦', to: '/inventory',  roles: ['admin', 'mesero', 'cajero'] },
+    { name: 'Orders',     desc: 'Open, manage and summarize orders.', icon: '🧾', to: '/orders',     roles: ['admin', 'mesero', 'cajero'] },
+    { name: 'Products',   desc: 'Manage the global product catalog.', icon: '🍺', to: '/products',   roles: ['admin'] },
+    { name: 'Categories', desc: 'Organize products by category.',     icon: '📂', to: '/categories', roles: ['admin'] },
+    { name: 'Users',      desc: 'Staff accounts and roles.',          icon: '👤', to: '/users',      roles: ['admin'] },
+    { name: 'Reports',    desc: 'Sales and product rotation report.', icon: '📊', to: '/reports',    roles: ['admin'] },
   ]
+
+  // Solo mostrar módulos a los que el usuario tiene acceso según su rol.
+  const MODULES = ALL_MODULES.filter(m => m.roles.includes(rol))
 
   return (
     <div>
@@ -126,22 +133,14 @@ export default function Dashboard() {
           Modules
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-          {MODULES.map(({ name, desc, icon, to, ready }) => {
-            const card = (
+          {MODULES.map(({ name, desc, icon, to }) => (
+            <Link key={name} to={to} className="no-underline">
               <div
                 className="card flex items-start gap-4 h-full"
-                style={{
-                  opacity: ready ? 1 : 0.55,
-                  cursor: ready ? 'pointer' : 'default',
-                  transition: 'transform 150ms, box-shadow 150ms',
-                }}
-                title={ready ? `Go to ${name}` : 'Coming soon'}
-                onMouseEnter={(e) => {
-                  if (ready) e.currentTarget.style.transform = 'translateY(-2px)'
-                }}
-                onMouseLeave={(e) => {
-                  if (ready) e.currentTarget.style.transform = 'none'
-                }}
+                style={{ cursor: 'pointer', transition: 'transform 150ms, box-shadow 150ms' }}
+                title={`Go to ${name}`}
+                onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)' }}
+                onMouseLeave={(e) => { e.currentTarget.style.transform = 'none' }}
               >
                 <span className="text-2xl mt-0.5" aria-hidden="true">{icon}</span>
                 <div>
@@ -151,20 +150,11 @@ export default function Dashboard() {
                   <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
                     {desc}
                   </p>
-                  <span className={`badge mt-2 ${ready ? 'badge-success' : 'badge-warning'}`}>
-                    {ready ? 'Available' : 'Coming soon'}
-                  </span>
+                  <span className="badge mt-2 badge-success">Available</span>
                 </div>
               </div>
-            )
-            return ready && to ? (
-              <Link key={name} to={to} className="no-underline">
-                {card}
-              </Link>
-            ) : (
-              <div key={name}>{card}</div>
-            )
-          })}
+            </Link>
+          ))}
         </div>
       </div>
     </div>
