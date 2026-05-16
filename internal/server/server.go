@@ -69,7 +69,7 @@ func (s *Server) setupRoutes() {
 	categorySvc  := services.NewCategoryService(categoryRepo)
 	productSvc   := services.NewProductService(productRepo, categoryRepo, venueRepo, inventoryRepo)
 	inventorySvc := services.NewInventoryService(inventoryRepo)
-	orderSvc     := services.NewOrderService(orderRepo, paymentRepo)
+	orderSvc     := services.NewOrderService(orderRepo, paymentRepo, inventoryRepo)
 	reportSvc    := services.NewReportService(orderRepo, inventoryRepo, paymentRepo)
 
 	// ── Capa de Controllers ───────────────────────────────────────────────────

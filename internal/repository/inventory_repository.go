@@ -63,9 +63,18 @@ func (r *inventoryRepository) FindByVenueID(venueID uint) ([]models.Inventory, e
 		Find(&items).Error
 }
 
+// FindByVenueAndProduct busca el stock de un producto en una sede específica.
+// Retorna (nil, nil) si no existe registro, lo que equivale a stock = 0.
 func (r *inventoryRepository) FindByVenueAndProduct(venueID, productID uint) (*models.Inventory, error) {
 	var item models.Inventory
-	return &item, r.db.Where("sede_id = ? AND producto_id = ?", venueID, productID).First(&item).Error
+	err := r.db.
+		Where("sede_id = ? AND producto_id = ?", venueID, productID).
+		Preload("Producto").
+		First(&item).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	return &item, err
 }
 
 func (r *inventoryRepository) Create(inv *models.Inventory) error {
