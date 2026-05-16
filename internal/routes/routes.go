@@ -106,6 +106,8 @@ func Register(r *gin.Engine, ctrl Controllers, authMiddleware gin.HandlerFunc) {
 	inventory := protected.Group("/inventory")
 	{
 		inventory.GET("", adminOrCashier, ctrl.Inventory.List)
+		// /movements antes que /:id para evitar ambigüedad con la ruta dinámica.
+		inventory.GET("/movements", adminOrCashier, ctrl.Inventory.ListMovements) // HU020
 		inventory.GET("/:id", ctrl.Inventory.GetByID)
 		inventory.POST("", ctrl.Inventory.Create)
 		inventory.POST("/add", adminOrCashier, ctrl.Inventory.AddStock) // HU018
