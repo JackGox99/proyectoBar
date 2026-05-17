@@ -2,7 +2,11 @@ package services
 
 import (
 	"errors"
+	"strings"
 
+	"gorm.io/gorm"
+
+	"bar-inventory-api/internal/algorithms"
 	"bar-inventory-api/internal/models"
 	"bar-inventory-api/internal/repository"
 )
@@ -29,6 +33,10 @@ type InventoryService interface {
 	// ListEntryMovements retorna las entradas manuales para el historial (HU020).
 	// venueID nil = sin filtro (admin viendo todas las sedes).
 	ListEntryMovements(venueID *uint, productSearch string) ([]models.InventoryMovement, error)
+	// SearchByProductName busca un ítem de inventario por nombre exacto de producto
+	// usando MergeSort + BinarySearch recursivo (ver algorithms/mergesort.go y binarysearch.go).
+	// Retorna gorm.ErrRecordNotFound si no existe ningún ítem con ese nombre en la sede.
+	SearchByProductName(venueID uint, name string) (*models.Inventory, error)
 }
 
 type inventoryService struct {
@@ -69,6 +77,32 @@ func (s *inventoryService) AddMovement(inventoryID uint, mov *models.InventoryMo
 // El controller resuelve el RBAC (cajero = solo su sede); aquí solo se pasa el filtro.
 func (s *inventoryService) ListEntryMovements(venueID *uint, productSearch string) ([]models.InventoryMovement, error) {
 	return s.repo.FindEntryMovements(venueID, productSearch)
+}
+
+// SearchByProductName busca un ítem de inventario por nombre de producto usando
+// MergeSort + BinarySearch recursivo:
+//  1. Obtiene todo el inventario de la sede (O(n) en BD).
+//  2. Ordena el slice por nombre de producto con MergeSort (O(n log n)).
+//  3. Aplica BinarySearchRecursive sobre el slice ordenado (O(log n)).
+func (s *inventoryService) SearchByProductName(venueID uint, name string) (*models.Inventory, error) {
+	items, err := s.repo.FindByVenueID(venueID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Paso 1: ordenar con MergeSort para cumplir el prerequisito del binary search.
+	sorted := algorithms.MergeSort(items, func(a, b models.Inventory) bool {
+		return strings.ToLower(a.Producto.Nombre) < strings.ToLower(b.Producto.Nombre)
+	})
+
+	// Paso 2: búsqueda binaria recursiva sobre el slice ordenado.
+	idx := algorithms.BinarySearchRecursive(sorted, name, func(inv models.Inventory) string {
+		return inv.Producto.Nombre
+	})
+	if idx == -1 {
+		return nil, gorm.ErrRecordNotFound
+	}
+	return &sorted[idx], nil
 }
 
 // AddStock valida los campos y delega al repositorio la suma atómica (HU018).

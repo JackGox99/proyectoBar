@@ -1,6 +1,13 @@
-// Package algorithms implementa algoritmos clásicos de ordenamiento
-// para la materia Diseño de Algoritmos. Se usan en producción dentro
-// del servicio de usuarios para ordenar resultados.
+// Package algorithms implementa algoritmos clásicos de ordenamiento y búsqueda
+// para la materia Diseño de Algoritmos. Se usan en producción dentro de los
+// servicios del sistema de inventario de bar.
+//
+// ─── DÓNDE SE USA EN EL PROYECTO ────────────────────────────────────────────
+//   Archivo : internal/services/user_service.go
+//   Función : userService.List(sortBy string)
+//   Cuándo  : Cuando el query param ?sort=username llega a GET /api/v1/users.
+//             El servicio llama QuickSort para ordenar el slice de usuarios
+//             alfabéticamente por nombre de usuario antes de devolverlo.
 package algorithms
 
 // QuickSort ordena un slice in-place usando el algoritmo Quick Sort.

@@ -2,12 +2,14 @@ package controllers
 
 import (
 	"errors"
+	"math"
 	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"bar-inventory-api/internal/algorithms"
 	"bar-inventory-api/internal/middleware"
 	"bar-inventory-api/internal/models"
 	"bar-inventory-api/internal/services"
@@ -267,7 +269,8 @@ func (oc *OrderController) Finalize(c *gin.Context) {
 	}
 
 	var body struct {
-		MetodoPago models.MetodoPago `json:"metodo_pago" binding:"required"`
+		MetodoPago     models.MetodoPago `json:"metodo_pago"      binding:"required"`
+		MontoEntregado float64           `json:"monto_entregado"` // opcional — solo efectivo
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "metodo_pago is required"})
@@ -292,6 +295,24 @@ func (oc *OrderController) Finalize(c *gin.Context) {
 		default:
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		}
+		return
+	}
+
+	// Algoritmo Voraz — Cambio de Monedas con caja registradora (algorithms/coinchange.go):
+	// Si el pago es en efectivo y el cajero envió monto_entregado > total,
+	// calculamos el cambio usando CoinChangeFromRegister con el stock de la caja.
+	// El resultado incluye CambioExacto=false si la caja no tiene suelto suficiente.
+	if body.MetodoPago == models.MetodoEfectivo && body.MontoEntregado > payment.Total {
+		cambioPesos := int(math.Round(body.MontoEntregado - payment.Total))
+		cambio := algorithms.CoinChangeFromRegister(algorithms.DefaultCashRegister, cambioPesos)
+		c.JSON(http.StatusOK, gin.H{
+			"id":          payment.ID,
+			"pedido_id":   payment.PedidoID,
+			"total":       payment.Total,
+			"metodo_pago": payment.MetodoPago,
+			"fecha":       payment.Fecha,
+			"cambio":      cambio,
+		})
 		return
 	}
 
