@@ -597,6 +597,7 @@ const METHOD_LABEL = {
 
 function CheckoutModal({ order, authHeaders, onSuccess, onClose }) {
   const [method, setMethod]           = useState(null)
+  const [tendered, setTendered]       = useState('')
   const [submitting, setSubmitting]   = useState(false)
   const [error, setError]             = useState('')
   const [paymentData, setPaymentData] = useState(null)
@@ -604,15 +605,21 @@ function CheckoutModal({ order, authHeaders, onSuccess, onClose }) {
   const items      = order?.items ?? []
   const grandTotal = items.reduce((sum, i) => sum + i.precio_unitario * i.cantidad, 0)
 
+  const tenderedNum  = parseFloat(tendered) || 0
+  const isCash       = method === 'efectivo'
+  const tenderedValid = !isCash || tenderedNum >= grandTotal
+
   async function handleFinalize() {
-    if (!method || submitting) return
+    if (!method || submitting || !tenderedValid) return
     setSubmitting(true)
     setError('')
     try {
+      const body = { metodo_pago: method }
+      if (isCash && tenderedNum > 0) body.monto_entregado = tenderedNum
       const res = await fetch(`${API}/orders/${order.id}/finalize`, {
         method: 'POST',
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ metodo_pago: method }),
+        body: JSON.stringify(body),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error || 'Payment failed')
@@ -662,6 +669,39 @@ function CheckoutModal({ order, authHeaders, onSuccess, onClose }) {
                 <span className="font-semibold" style={{ color: 'var(--color-text-primary)' }}>{value}</span>
               </div>
             ))}
+
+            {/* Cambio — solo aparece cuando el backend lo calcula (pago en efectivo) */}
+            {paymentData.cambio && paymentData.cambio.total_cambio > 0 && (
+              <div
+                className="mt-1 rounded-lg px-3 py-3 flex flex-col gap-2"
+                style={{
+                  backgroundColor: 'var(--color-bg-alt)',
+                  border: `1px solid ${paymentData.cambio.cambio_exacto ? 'var(--color-border)' : '#dc2626'}`,
+                }}
+              >
+                <div className="flex items-center justify-between text-sm font-bold">
+                  <span style={{ color: 'var(--color-text-primary)' }}>Change</span>
+                  <span style={{ color: '#16a34a' }}>{formatCurrency(paymentData.cambio.total_cambio)}</span>
+                </div>
+
+                {/* Desglose de billetes/monedas */}
+                <div className="flex flex-col gap-1">
+                  {paymentData.cambio.denominaciones.map(({ denominacion, cantidad }) => (
+                    <div key={denominacion} className="flex items-center justify-between text-xs">
+                      <span style={{ color: 'var(--color-text-muted)' }}>{formatCurrency(denominacion)}</span>
+                      <span className="font-semibold" style={{ color: 'var(--color-text-primary)' }}>x {cantidad}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Alerta si la caja no tiene suelto exacto */}
+                {!paymentData.cambio.cambio_exacto && (
+                  <p className="text-xs font-medium mt-1" style={{ color: '#dc2626' }}>
+                    Exact change not available in register. Ask the customer for a closer amount.
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Action */}
@@ -740,6 +780,35 @@ function CheckoutModal({ order, authHeaders, onSuccess, onClose }) {
           })}
         </div>
 
+        {/* Monto entregado — solo visible cuando el método es efectivo */}
+        {isCash && (
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>
+              Amount Tendered <span style={{ color: 'var(--color-text-muted)', fontWeight: 400 }}>(optional)</span>
+            </label>
+            <input
+              type="number"
+              min={grandTotal}
+              step="50"
+              value={tendered}
+              onChange={e => setTendered(e.target.value)}
+              className="input-field w-full"
+              placeholder={`Min. ${formatCurrency(grandTotal)}`}
+              style={tendered && !tenderedValid ? { borderColor: '#dc2626' } : {}}
+            />
+            {tendered && !tenderedValid && (
+              <p className="text-xs font-medium" style={{ color: '#dc2626' }}>
+                Amount must be at least {formatCurrency(grandTotal)}
+              </p>
+            )}
+            {tendered && tenderedValid && tenderedNum > grandTotal && (
+              <p className="text-xs" style={{ color: '#16a34a' }}>
+                Change: {formatCurrency(Math.round(tenderedNum - grandTotal))}
+              </p>
+            )}
+          </div>
+        )}
+
         {error && (
           <p className="text-sm font-medium" style={{ color: '#dc2626' }}>{error}</p>
         )}
@@ -747,9 +816,9 @@ function CheckoutModal({ order, authHeaders, onSuccess, onClose }) {
         {/* Finalize */}
         <button
           onClick={handleFinalize}
-          disabled={!method || submitting}
+          disabled={!method || submitting || !tenderedValid}
           className="w-full py-3 rounded-lg text-sm font-bold transition-opacity disabled:opacity-50"
-          style={{ backgroundColor: '#16a34a', color: '#fff', cursor: method && !submitting ? 'pointer' : 'not-allowed' }}
+          style={{ backgroundColor: '#16a34a', color: '#fff', cursor: method && !submitting && tenderedValid ? 'pointer' : 'not-allowed' }}
         >
           {submitting ? 'Processing…' : 'Finalize Transaction'}
         </button>

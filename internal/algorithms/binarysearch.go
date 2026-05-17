@@ -1,3 +1,16 @@
+// Package algorithms — ver quicksort.go para la descripción del paquete.
+//
+// ─── DÓNDE SE USA EN EL PROYECTO ────────────────────────────────────────────
+//   Archivo : internal/services/inventory_service.go
+//   Función : inventoryService.SearchByProductName(venueID uint, name string)
+//   Cuándo  : Cuando llega GET /api/v1/inventory?search=<nombre> el controlador
+//             llama SearchByProductName. El servicio:
+//               1. Trae el inventario de la sede con FindByVenueID (O(n) DB).
+//               2. Ordena el resultado con MergeSort por nombre de producto.
+//               3. Llama BinarySearchRecursive para encontrar el ítem en O(log n).
+//             Ambas variantes (iterativa y recursiva) están implementadas para
+//             ilustrar la diferencia iterativo/recursivo vista en clase
+//             (equivalente al ejemplo del Factorial). La producción usa la recursiva.
 package algorithms
 
 import "strings"

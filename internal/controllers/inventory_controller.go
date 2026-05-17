@@ -44,10 +44,28 @@ func (ic *InventoryController) List(c *gin.Context) {
 		err   error
 	)
 
+	search := c.Query("search")
+
 	switch claims.Rol {
 	case models.RolAdmin:
-		if q := c.Query("venue_id"); q != "" {
-			venueID, parseErr := strconv.ParseUint(q, 10, 64)
+		venueQ := c.Query("venue_id")
+		if search != "" && venueQ != "" {
+			// Binary search: requiere venue_id para acotar la sede.
+			venueID, parseErr := strconv.ParseUint(venueQ, 10, 64)
+			if parseErr != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid venue_id"})
+				return
+			}
+			item, searchErr := ic.service.SearchByProductName(uint(venueID), search)
+			if searchErr != nil {
+				c.JSON(http.StatusOK, []models.Inventory{})
+				return
+			}
+			c.JSON(http.StatusOK, []models.Inventory{*item})
+			return
+		}
+		if venueQ != "" {
+			venueID, parseErr := strconv.ParseUint(venueQ, 10, 64)
 			if parseErr != nil {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid venue_id"})
 				return
@@ -59,6 +77,16 @@ func (ic *InventoryController) List(c *gin.Context) {
 	case models.RolCajero, models.RolMesero:
 		if claims.SedeID == nil {
 			c.JSON(http.StatusForbidden, gin.H{"error": "user has no assigned location"})
+			return
+		}
+		if search != "" {
+			// Binary search: ordena inventario de la sede y busca por nombre exacto.
+			item, searchErr := ic.service.SearchByProductName(*claims.SedeID, search)
+			if searchErr != nil {
+				c.JSON(http.StatusOK, []models.Inventory{})
+				return
+			}
+			c.JSON(http.StatusOK, []models.Inventory{*item})
 			return
 		}
 		items, err = ic.service.ListByVenue(*claims.SedeID)
