@@ -1,3 +1,17 @@
+// Package algorithms — ver quicksort.go para la descripción del paquete.
+//
+// ─── DÓNDE SE USA EN EL PROYECTO ────────────────────────────────────────────
+//   Archivo 1: internal/services/user_service.go
+//   Función  : userService.List(sortBy string)
+//   Cuándo   : Cuando el query param ?sort=nombre llega a GET /api/v1/users.
+//              MergeSort garantiza estabilidad: dos usuarios con el mismo
+//              nombre mantienen su orden relativo original.
+//
+//   Archivo 2: internal/services/inventory_service.go
+//   Función  : inventoryService.SearchByProductName(venueID, name)
+//   Cuándo   : Antes de aplicar BinarySearch sobre el inventario de una sede,
+//              el servicio ordena el slice de ítems por nombre de producto con
+//              MergeSort para que la búsqueda binaria funcione correctamente.
 package algorithms
 
 // MergeSort ordena un slice usando el algoritmo Merge Sort (divide and conquer).
