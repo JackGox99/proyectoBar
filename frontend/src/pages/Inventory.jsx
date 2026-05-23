@@ -23,6 +23,15 @@ export default function Inventory() {
   // Admin-only: '' = All Locations, otherwise a specific venue ID.
   const [adminVenueId, setAdminVenueId] = useState('')
 
+  // Binary-search demo (iterative vs recursive). Llama al endpoint dedicado
+  // /inventory/binary-search?algo=iterative|recursive para mostrar al usuario
+  // qué variante del algoritmo se ejecutó en el backend.
+  const [binQuery, setBinQuery]     = useState('')
+  const [binAlgo, setBinAlgo]       = useState('recursive')
+  const [binResult, setBinResult]   = useState(null) // { item, algo, found, elapsedMs }
+  const [binLoading, setBinLoading] = useState(false)
+  const [binError, setBinError]     = useState('')
+
   // Manual Stock Entry modal (HU018)
   const [modalOpen, setModalOpen]       = useState(false)
   const [entryProduct, setEntryProduct] = useState('')
@@ -209,6 +218,45 @@ export default function Inventory() {
     return () => clearTimeout(t)
   }, [toast])
 
+  // Llama al endpoint /inventory/binary-search con el algoritmo elegido.
+  // Mide tiempo en el cliente para que el usuario pueda comparar iterativo vs recursivo.
+  const handleBinarySearch = async (e) => {
+    e?.preventDefault?.()
+    setBinError('')
+    setBinResult(null)
+
+    const name = binQuery.trim()
+    if (!name) {
+      setBinError('Type a product name to search.')
+      return
+    }
+    if (isAdmin && !adminVenueId) {
+      setBinError('Select a location first (admin must scope the search to one venue).')
+      return
+    }
+
+    setBinLoading(true)
+    const params = new URLSearchParams({ name, algo: binAlgo })
+    if (isAdmin) params.set('venue_id', String(adminVenueId))
+
+    const started = performance.now()
+    try {
+      const res = await fetch(`/api/v1/inventory/binary-search?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${currentUser?.token ?? ''}` },
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(data.error || 'Binary search request failed')
+      }
+      const elapsedMs = performance.now() - started
+      setBinResult({ ...data, elapsedMs })
+    } catch (err) {
+      setBinError(err.message)
+    } finally {
+      setBinLoading(false)
+    }
+  }
+
   if (!canView) {
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-4">
@@ -340,6 +388,133 @@ export default function Inventory() {
               </option>
             ))}
           </select>
+        )}
+      </div>
+
+      {/* Binary Search Demo — exact match via iterative or recursive algorithm */}
+      <div
+        className="mb-4 rounded-lg p-4"
+        style={{
+          backgroundColor: 'var(--color-bg-surface)',
+          border: '1px solid var(--color-border)',
+        }}
+      >
+        <div className="flex items-baseline justify-between mb-3">
+          <h3 className="text-sm font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-primary)' }}>
+            Binary Search — Exact Match
+          </h3>
+          <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+            O(log n) — runs MergeSort first, then binary search
+          </span>
+        </div>
+
+        <form onSubmit={handleBinarySearch} className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-end">
+          <div className="flex-1 min-w-[180px]">
+            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>
+              Product name (exact)
+            </label>
+            <input
+              type="text"
+              value={binQuery}
+              onChange={(e) => setBinQuery(e.target.value)}
+              placeholder="e.g. cerveza"
+              className="w-full px-3 py-2 rounded-md text-sm outline-none"
+              style={{
+                backgroundColor: 'var(--color-bg-elevated)',
+                border: '1px solid var(--color-border)',
+                color: 'var(--color-text-primary)',
+              }}
+            />
+          </div>
+
+          <div>
+            <span className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>
+              Algorithm
+            </span>
+            <div
+              className="inline-flex rounded-md overflow-hidden"
+              style={{ border: '1px solid var(--color-border)' }}
+              role="radiogroup"
+              aria-label="Binary search algorithm"
+            >
+              {[
+                { key: 'iterative', label: 'Iterative' },
+                { key: 'recursive', label: 'Recursive' },
+              ].map(({ key, label }) => {
+                const active = binAlgo === key
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    onClick={() => setBinAlgo(key)}
+                    className="px-3 py-2 text-sm font-semibold transition-colors duration-150"
+                    style={{
+                      backgroundColor: active ? 'var(--color-brand-primary)' : 'transparent',
+                      color: active ? '#1A0E02' : 'var(--color-text-primary)',
+                    }}
+                  >
+                    {label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={binLoading}
+            className="px-4 py-2 rounded-md text-sm font-semibold transition-opacity duration-150 hover:opacity-90 disabled:opacity-60"
+            style={{
+              backgroundColor: 'var(--color-brand-primary)',
+              color: '#1A0E02',
+            }}
+          >
+            {binLoading ? 'Searching…' : 'Run Search'}
+          </button>
+        </form>
+
+        {binError && (
+          <p className="mt-3 text-sm" style={{ color: 'var(--color-error)' }}>
+            {binError}
+          </p>
+        )}
+
+        {binResult && (
+          <div
+            className="mt-3 rounded-md p-3 text-sm"
+            style={{
+              backgroundColor: 'var(--color-bg-elevated)',
+              border: '1px solid var(--color-border)',
+              color: 'var(--color-text-primary)',
+            }}
+          >
+            <div className="flex flex-wrap items-center gap-2 mb-1">
+              <span
+                className="px-2 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider"
+                style={{
+                  backgroundColor: 'var(--color-brand-primary)',
+                  color: '#1A0E02',
+                }}
+              >
+                {binResult.algo}
+              </span>
+              <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                {binResult.elapsedMs?.toFixed(2)} ms (round-trip)
+              </span>
+            </div>
+            {binResult.found ? (
+              <p>
+                Found <strong>{binResult.item?.producto?.nombre}</strong> — current stock:{' '}
+                <strong>{binResult.item?.stock_actual}</strong>
+              </p>
+            ) : (
+              <p style={{ color: 'var(--color-text-muted)' }}>
+                No product matches that exact name in the selected location.
+              </p>
+            )}
+          </div>
         )}
       </div>
 

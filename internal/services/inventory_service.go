@@ -34,10 +34,19 @@ type InventoryService interface {
 	// venueID nil = sin filtro (admin viendo todas las sedes).
 	ListEntryMovements(venueID *uint, productSearch string) ([]models.InventoryMovement, error)
 	// SearchByProductName busca un ítem de inventario por nombre exacto de producto
-	// usando MergeSort + BinarySearch recursivo (ver algorithms/mergesort.go y binarysearch.go).
+	// usando MergeSort + BinarySearch (ver algorithms/mergesort.go y binarysearch.go).
+	// El parámetro algo selecciona la variante: "iterative" o "recursive".
+	// Si algo es vacío o desconocido, usa "recursive" por defecto.
 	// Retorna gorm.ErrRecordNotFound si no existe ningún ítem con ese nombre en la sede.
-	SearchByProductName(venueID uint, name string) (*models.Inventory, error)
+	SearchByProductName(venueID uint, name string, algo string) (*models.Inventory, error)
 }
+
+// Constantes para las variantes de binary search expuestas a controllers / API.
+// Se usan para comparar contra el parámetro ?algo= del endpoint de búsqueda.
+const (
+	AlgoIterative = "iterative"
+	AlgoRecursive = "recursive"
+)
 
 type inventoryService struct {
 	repo repository.InventoryRepository
@@ -80,11 +89,16 @@ func (s *inventoryService) ListEntryMovements(venueID *uint, productSearch strin
 }
 
 // SearchByProductName busca un ítem de inventario por nombre de producto usando
-// MergeSort + BinarySearch recursivo:
+// MergeSort + BinarySearch (variante seleccionable):
 //  1. Obtiene todo el inventario de la sede (O(n) en BD).
 //  2. Ordena el slice por nombre de producto con MergeSort (O(n log n)).
-//  3. Aplica BinarySearchRecursive sobre el slice ordenado (O(log n)).
-func (s *inventoryService) SearchByProductName(venueID uint, name string) (*models.Inventory, error) {
+//  3. Aplica binary search sobre el slice ordenado (O(log n)).
+//     - algo == "iterative"  → BinarySearchIterative  (loop con low/high)
+//     - algo == "recursive"  → BinarySearchRecursive  (llamada recursiva, default)
+//
+// Las dos variantes están expuestas para ilustrar en la UI la diferencia
+// iterativo/recursivo (paralelo al ejemplo del Factorial visto en clase).
+func (s *inventoryService) SearchByProductName(venueID uint, name string, algo string) (*models.Inventory, error) {
 	items, err := s.repo.FindByVenueID(venueID)
 	if err != nil {
 		return nil, err
@@ -95,10 +109,14 @@ func (s *inventoryService) SearchByProductName(venueID uint, name string) (*mode
 		return strings.ToLower(a.Producto.Nombre) < strings.ToLower(b.Producto.Nombre)
 	})
 
-	// Paso 2: búsqueda binaria recursiva sobre el slice ordenado.
-	idx := algorithms.BinarySearchRecursive(sorted, name, func(inv models.Inventory) string {
-		return inv.Producto.Nombre
-	})
+	// Paso 2: búsqueda binaria — variante elegida por el caller.
+	keyFn := func(inv models.Inventory) string { return inv.Producto.Nombre }
+	var idx int
+	if algo == AlgoIterative {
+		idx = algorithms.BinarySearchIterative(sorted, name, keyFn)
+	} else {
+		idx = algorithms.BinarySearchRecursive(sorted, name, keyFn)
+	}
 	if idx == -1 {
 		return nil, gorm.ErrRecordNotFound
 	}
