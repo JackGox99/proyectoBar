@@ -2,15 +2,24 @@
 //
 // ─── DÓNDE SE USA EN EL PROYECTO ────────────────────────────────────────────
 //   Archivo : internal/services/inventory_service.go
-//   Función : inventoryService.SearchByProductName(venueID uint, name string)
-//   Cuándo  : Cuando llega GET /api/v1/inventory?search=<nombre> el controlador
-//             llama SearchByProductName. El servicio:
-//               1. Trae el inventario de la sede con FindByVenueID (O(n) DB).
-//               2. Ordena el resultado con MergeSort por nombre de producto.
-//               3. Llama BinarySearchRecursive para encontrar el ítem en O(log n).
-//             Ambas variantes (iterativa y recursiva) están implementadas para
-//             ilustrar la diferencia iterativo/recursivo vista en clase
-//             (equivalente al ejemplo del Factorial). La producción usa la recursiva.
+//   Función : inventoryService.SearchByProductName(venueID uint, name, algo string)
+//
+//   Endpoints HTTP que disparan estas funciones:
+//     - GET /api/v1/inventory?search=<nombre>           → BinarySearchRecursive
+//                                                         (variante por defecto)
+//     - GET /api/v1/inventory/binary-search?name=&algo= → la que pida el cliente:
+//                                                         "iterative"  → BinarySearchIterative
+//                                                         "recursive"  → BinarySearchRecursive
+//
+//   El endpoint /binary-search es la demo educativa: la UI de Inventory
+//   tiene un toggle Iterative/Recursive que dispara este endpoint y muestra
+//   qué variante respondió, ilustrando la diferencia iterativo/recursivo
+//   vista en clase (paralelo al ejemplo del Factorial).
+//
+//   En ambos casos el servicio:
+//     1. Trae el inventario de la sede con FindByVenueID (O(n) DB).
+//     2. Ordena con MergeSort por nombre de producto (O(n log n)).
+//     3. Aplica la variante de binary search seleccionada (O(log n)).
 package algorithms
 
 import "strings"

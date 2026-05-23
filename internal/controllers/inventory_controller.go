@@ -56,7 +56,9 @@ func (ic *InventoryController) List(c *gin.Context) {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid venue_id"})
 				return
 			}
-			item, searchErr := ic.service.SearchByProductName(uint(venueID), search)
+			// Endpoint genérico: usa la variante recursiva por defecto.
+			// Para elegir explícitamente iterativa vs recursiva, usar el endpoint /binary-search.
+			item, searchErr := ic.service.SearchByProductName(uint(venueID), search, services.AlgoRecursive)
 			if searchErr != nil {
 				c.JSON(http.StatusOK, []models.Inventory{})
 				return
@@ -81,7 +83,7 @@ func (ic *InventoryController) List(c *gin.Context) {
 		}
 		if search != "" {
 			// Binary search: ordena inventario de la sede y busca por nombre exacto.
-			item, searchErr := ic.service.SearchByProductName(*claims.SedeID, search)
+			item, searchErr := ic.service.SearchByProductName(*claims.SedeID, search, services.AlgoRecursive)
 			if searchErr != nil {
 				c.JSON(http.StatusOK, []models.Inventory{})
 				return
@@ -104,6 +106,72 @@ func (ic *InventoryController) List(c *gin.Context) {
 
 func (ic *InventoryController) GetByID(c *gin.Context) {
 	c.JSON(http.StatusNotImplemented, gin.H{"message": "not implemented"})
+}
+
+// BinarySearch expone explícitamente las dos variantes del algoritmo de
+// búsqueda binaria (iterativa y recursiva) para uso didáctico desde la UI.
+//
+// Query params:
+//   - name      (required) — nombre exacto del producto a buscar.
+//   - venue_id  (required para admin; ignorado para cajero/mesero — usa su sede).
+//   - algo      (optional) — "iterative" | "recursive". Default: "recursive".
+//
+// Respuesta: { item, algo, found } — item es null cuando found=false.
+// El frontend usa "algo" para mostrar al usuario qué variante se ejecutó.
+func (ic *InventoryController) BinarySearch(c *gin.Context) {
+	raw, exists := c.Get(middleware.CtxClaims)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+		return
+	}
+	claims, ok := raw.(*services.TokenClaims)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid authentication context"})
+		return
+	}
+
+	name := c.Query("name")
+	if name == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "name is required"})
+		return
+	}
+
+	algo := c.Query("algo")
+	if algo != services.AlgoIterative && algo != services.AlgoRecursive {
+		algo = services.AlgoRecursive
+	}
+
+	var venueID uint
+	switch claims.Rol {
+	case models.RolAdmin:
+		venueQ := c.Query("venue_id")
+		if venueQ == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "venue_id is required for admin"})
+			return
+		}
+		parsed, parseErr := strconv.ParseUint(venueQ, 10, 64)
+		if parseErr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid venue_id"})
+			return
+		}
+		venueID = uint(parsed)
+	case models.RolCajero, models.RolMesero:
+		if claims.SedeID == nil {
+			c.JSON(http.StatusForbidden, gin.H{"error": "user has no assigned location"})
+			return
+		}
+		venueID = *claims.SedeID
+	default:
+		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden: insufficient privileges"})
+		return
+	}
+
+	item, err := ic.service.SearchByProductName(venueID, name, algo)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"item": nil, "algo": algo, "found": false})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"item": item, "algo": algo, "found": true})
 }
 
 // ListMovements retorna el historial de entradas manuales (HU020) aplicando RBAC:
