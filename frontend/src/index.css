@@ -174,6 +174,38 @@ a:hover {
     border-left: 3px solid var(--color-brand-primary);
   }
 
+  /* Form input / select */
+  .input-field {
+    @apply w-full px-3 py-2 rounded-md text-sm transition-colors duration-150
+           focus-visible:outline-none;
+    background-color: var(--color-bg-elevated);
+    color: var(--color-text-primary);
+    border: 1px solid var(--color-border);
+  }
+  .input-field::placeholder {
+    color: var(--color-text-muted);
+  }
+  .input-field:focus {
+    border-color: var(--color-brand-primary);
+  }
+  .input-field:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  /* Native <option> elements have very limited styling, but background+color work in most browsers */
+  .input-field option {
+    background-color: var(--color-bg-elevated);
+    color: var(--color-text-primary);
+  }
+  .input-field option:disabled {
+    color: var(--color-text-muted);
+  }
+  /* Calendar picker icon on date inputs — invert so it's visible on dark bg */
+  .input-field::-webkit-calendar-picker-indicator {
+    filter: invert(0.8);
+    cursor: pointer;
+  }
+
   /* Status badge */
   .badge {
     @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
